@@ -2,14 +2,19 @@
 Butter
 ======
 
-Butter is library of [Fabric](http://fabfile.org) tasks aimed at helping the
+Butter is library of `Fabric <http://fabfile.org>`_ tasks aimed at helping the
 development and  deployment of Drupal sites at OMBU, although as a framework it
 could be used for any type of site.
 
-`fab -l` will output a list of available tasks
+``fab -l`` will output a list of available tasks
 
-_This is a work in progress, subject to major refactoring. Use at your own
-risk. If you find it useful, I'd love to hear about how._
+*This is a work in progress, subject to major refactoring. Use at your own
+risk. If you find it useful, I'd love to hear about how.t st*
+
+Install
+=======
+
+    pip install  git+git://github.com/ombu/butter.git
 
 Requirements
 ============

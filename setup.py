@@ -1,3 +1,7 @@
+"""
+see http://guide.python-distribute.org/creation.html
+"""
+
 from distutils.core import setup
 
 setup(
@@ -6,11 +10,10 @@ setup(
     author='OMBU',
     author_email='martin@ombuweb.com',
     packages=['butter'],
-    # scripts=['bin/stowe-towels.py','bin/wash-towels.py'],
-    # url='http://pypi.python.org/pypi/TowelStuff/',
+    url='https://github.com/ombu/butter',
     license='LICENSE.txt',
     description='Fabric library for developing and deploying Drupal sites.',
-    long_description=open('README.txt').read(),
+    long_description=open('README.rst').read(),
     install_requires=[
         "Fabric >= l.3.4",
     ],
