@@ -1,3 +1,4 @@
+======
 Butter
 ======
 
@@ -5,16 +6,19 @@ Butter is library of [Fabric](http://fabfile.org) tasks aimed at helping the
 development and  deployment of Drupal sites at OMBU, although as a framework it
 could be used for any type of site.
 
-`fab -l` will output a list of available tasks 
+`fab -l` will output a list of available tasks
 
 _This is a work in progress, subject to major refactoring. Use at your own
 risk. If you find it useful, I'd love to hear about how._
 
-## Requirements
-- Python 2.7 or higher (not tested on Python 3)
-- [Fabric](http://fabfile.org)
+Requirements
+============
 
-## License
+* Python 2.7 or higher (not tested on Python 3)
+* `Fabric <http://fabfile.org>`_
+
+License
+=======
 
 Copyright (c) 2012, OMBU Inc. http://ombuweb.com
 All rights reserved.
