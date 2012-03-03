@@ -1,4 +1,5 @@
 from __future__ import with_statement
+from fabric.api import env, cd
 from fabric.operations import run
 
 def check_commit(ref):
@@ -11,7 +12,7 @@ def check_commit(ref):
         else:
             return result
 
-def clone_git(parsed_ref):
+def clone(parsed_ref):
     print('+ Preparing %s for deployment' % parsed_ref)
     with cd(env.host_site_path):
         run('git clone private/repo changesets/%s' % parsed_ref)

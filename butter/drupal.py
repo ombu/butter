@@ -1,20 +1,29 @@
 from __future__ import with_statement
-from fabric.api import task, env
+from fabric.api import task, env, cd
 from fabric.operations import run
+from fabric.contrib import files
+from butter import deploy
+from butter.host import pre_clean
 
 @task
-def deploy(ref):
+def push(ref):
     """
     Deploy a commit to a host
     """
-    parsed_ref = check_commit(ref)
+
+    if env.repo_type == 'git':
+        from butter import git as repo
+    elif env.repo_type == 'hg':
+        from butter import hg as repo
+
+    parsed_ref = repo.check_commit(ref)
     build_path = '%s/changesets/%s' % (env.host_site_path, parsed_ref)
     pre_clean(build_path)
-    clone_git(parsed_ref)
+    repo.checkout(parsed_ref)
     settings_php(build_path)
     set_perms(build_path)
     link_files(build_path)
-    mark(parsed_ref)
+    deploy.mark(parsed_ref)
 
 def settings_php(build_path):
     print('+ Configuring site settings.php')
@@ -25,8 +34,8 @@ def settings_php(build_path):
             files.sed(file, '%%DB_USER%%', env.db_user)
             files.sed(file, '%%DB_PW%%', env.db_pw)
             files.sed(file, '%%DB_HOST%%', env.db_host)
-            files.sed(file, '%%DB_LEGACY_CODEBASE%%', env.paramount_legacy_codebase)
-            files.sed(file, '%%BASE_URL%%', env.base_url)
+            if 'base_url' in env:
+                files.sed(file, '%%BASE_URL%%', env.base_url)
             if files.exists('settings.php'):
                 run('rm settings.php')
             run('cp settings.%s.php settings.php' % env.host_type )
@@ -36,26 +45,24 @@ def settings_php(build_path):
             abort('Could not find %s' % file)
 
 def set_perms(build_path):
+    from fabric.api import sudo
     print('+ Setting file permissions')
     with cd(env.host_site_path):
-        with hide('running', 'stdout'):
-            sudo('chown -R %s private logs files %s' % (env.user, build_path))
-            sudo('chgrp -R %s files %s' % (env.host_webserver_user, build_path))
-            sudo('chmod -R 2750 %s' % build_path)
-            sudo('chmod -R 2770 files')
-            sudo('chmod -R 0700 private logs')
-            sudo('chmod 0440 %s/public/sites/default/settings*' % build_path)
+        sudo('chown -R %s private logs files %s' % (env.user, build_path))
+        sudo('chgrp -R %s files %s' % (env.host_webserver_user, build_path))
+        sudo('chmod -R 2750 %s' % build_path)
+        sudo('chmod -R 2770 files')
+        sudo('chmod -R 0700 private logs')
+        sudo('chmod 0440 %s/public/sites/default/settings*' % build_path)
 
 def link_files(build_path):
     print('+ Creating symlinks')
     with cd('%s/public/sites/default' % build_path):
-        with hide('running', 'stdout'):
-            run('rm -rf files')
-            run('ln -s ../../../../../files files')
+        run('rm -rf files')
+        run('ln -s ../../../../../files files')
     with cd(env.host_site_path):
-        with hide('running', 'stdout'):
-            run('if [ -h current ] ; then unlink current ; fi')
-            run('ln -s %s/public current' % build_path)
+        run('if [ -h current ] ; then unlink current ; fi')
+        run('ln -s %s/public current' % build_path)
 
 @task
 def set_files_perms():
@@ -64,10 +71,9 @@ def set_files_perms():
     """
     print('+ Setting permissions for the files directory')
     with cd(env.host_site_path):
-        with hide('running', 'stdout'):
-            sudo('chown -R %s files' % env.user)
-            sudo('chgrp -R %s files' % env.host_webserver_user)
-            sudo('chmod -R 2770 files')
+        sudo('chown -R %s files' % env.user)
+        sudo('chgrp -R %s files' % env.host_webserver_user)
+        sudo('chmod -R 2770 files')
 
 @task
 def pull(to='local'):
@@ -75,6 +81,8 @@ def pull(to='local'):
     Moves drupal sites between servers
     """
     import getpass
+    from fabric.api import hide
+    from fabric.operations import get, put, local
     mysql_from = getpass.getpass('Enter the MySQL root password of the `from` server:')
     mysql_to = getpass.getpass('Enter the MySQL root password of the `to` server:')
     sqldump = '/tmp/foobar.sql.gz'
@@ -96,7 +104,7 @@ def pull(to='local'):
     else:
         import sys
         # call the environment
-        getattr(sys.modules[__name__], to)()
+        locals()[to]()
         put(sqldump, sqldump)
         run("echo 'drop database if exists pmount; create database pmount;' | mysql -u root -p%s" % mysql_to)
         run("gunzip -c %s | mysql -uroot -p%s -Dpmount" % (sqldump, mysql_to))

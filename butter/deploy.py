@@ -1,6 +1,9 @@
 from __future__ import with_statement
-from fabric.api import task, env
 from fabric.operations import run
+from fabric.api import task, env, cd, hide
+from fabric.contrib import files
+from time import gmtime, strftime
+import os
 
 @task
 def log():

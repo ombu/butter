@@ -14,7 +14,14 @@ risk. If you find it useful, I'd love to hear about how.t st*
 Install
 =======
 
-    pip install  git+git://github.com/ombu/butter.git
+    pip install git+git://github.com/ombu/butter.git
+
+Library
+=======
+
+    from butter import drush, deploy
+    drush.cc()
+    deploy.log()
 
 Requirements
 ============

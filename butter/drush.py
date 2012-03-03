@@ -1,5 +1,5 @@
 from __future__ import with_statement
-from fabric.api import task, env
+from fabric.api import task, env, cd
 from fabric.operations import run
 
 @task
