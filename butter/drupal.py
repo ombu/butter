@@ -113,3 +113,9 @@ def pull(to='local'):
                 --rsh='ssh -p %s' --compress %s@%s:%s %s/files/     \
                 --exclude=css --exclude=js --exclude=styles
                 """ % (env.port, env.user, env.host, remote_files, env.host_site_path))
+
+@task
+def rebuild():
+    print('Rebuilding the site profile')
+    with cd(env.host_site_path + '/current'):
+      run("""sh ../private/reset.sh -d""")

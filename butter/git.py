@@ -12,7 +12,7 @@ def check_commit(ref):
         else:
             return result
 
-def clone(parsed_ref):
+def checkout(parsed_ref):
     print('+ Preparing %s for deployment' % parsed_ref)
     with cd(env.host_site_path):
         run('git clone private/repo changesets/%s' % parsed_ref)
