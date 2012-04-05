@@ -6,4 +6,5 @@ butter/drupal.py
 butter/drush.py
 butter/fabfile.py
 butter/git.py
+butter/hg.py
 butter/host.py
