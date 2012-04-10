@@ -1,7 +1,8 @@
 from __future__ import with_statement
-from fabric.api import task, env, cd
-from fabric.operations import run
+from fabric.api import task, env, cd, hide
+from fabric.operations import run, prompt
 from fabric.contrib import files
+from fabric.contrib import console
 from butter import deploy
 from butter.host import pre_clean
 
@@ -10,12 +11,12 @@ def push(ref):
     """
     Deploy a commit to a host
     """
-
+    if not files.exists('%s/private/repo' % env.host_site_path):
+        setup_env()
     if env.repo_type == 'git':
         from butter import git as repo
     elif env.repo_type == 'hg':
         from butter import hg as repo
-
     parsed_ref = repo.check_commit(ref)
     build_path = '%s/changesets/%s' % (env.host_site_path, parsed_ref)
     pre_clean(build_path)
@@ -24,6 +25,71 @@ def push(ref):
     set_perms(build_path)
     link_files(build_path)
     deploy.mark(parsed_ref)
+
+@task
+def setup_env():
+    """
+    Set up the directory structure at env.host_site_path
+    """
+
+    print('+ Creating directory structure')
+    if files.exists(env.host_site_path):
+        if console.confirm('Remove existing directory %s' % env.host_site_path):
+            with hide('running', 'stdout'):
+                run('rm -rf %s' % env.host_site_path)
+        else:
+            print('+ Directory not removed and recreated')
+            return
+    with hide('running', 'stdout'):
+        run('mkdir -p %s' % env.host_site_path)
+    with cd(env.host_site_path):
+        with hide('running', 'stdout'):
+            run('mkdir changesets')
+            run('mkdir files')
+            run('mkdir logs')
+            run('touch logs/access.log')
+            run('touch logs/error.log')
+            run('mkdir private')
+            print('+ Cloning repository: %s' % env.repo_url)
+            run('%s clone %s private/repo' % (env.repo_type, env.repo_url))
+            url = prompt('Please enter the site url (ex: qa4.dev.ombuweb.com): ')
+            virtual_host = 'private/%s' % url
+            if files.exists(virtual_host):
+                run('rm %s' % virtual_host)
+            virtual_host_contents = """<VirtualHost *:80>
+
+  # Admin email, Server Name (domain name) and any aliases
+  ServerAdmin martin@ombuweb.com
+  ServerName %%url%%
+
+  # Index file and Document Root (where the public files are located)
+  DirectoryIndex index.php
+  DocumentRoot %%host_site_path%%/current
+
+  # Custom log file locations
+  ErrorLog  %%host_site_path%%/logs/error.log
+  CustomLog %%host_site_path%%/logs/access.log combined
+
+  <Directory />
+
+    SetEnv APPLICATION_ENV %%host_type%%
+    AllowOverride All
+
+    AuthType Basic
+    AuthName "Protected"
+    AuthUserFile /mnt/main/qa/htpwd
+    Require user dev1
+
+  </Directory>
+
+</VirtualHost>"""
+            files.append(virtual_host, virtual_host_contents);
+            files.sed(virtual_host, '%%host_site_path%%', env.host_site_path)
+            files.sed(virtual_host, '%%host_type%%', env.host_type)
+            files.sed(virtual_host, '%%url%%', url)
+            run('rm %s.bak' % virtual_host)
+    print('+ Site directory structure created at: %s' % env.host_site_path)
+
 
 def settings_php(build_path):
     print('+ Configuring site settings.php')
