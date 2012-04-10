@@ -11,8 +11,7 @@ def push(ref):
     """
     Deploy a commit to a host
     """
-    if not files.exists('%s/private/repo' % env.host_site_path):
-        setup_env()
+
     if env.repo_type == 'git':
         from butter import git as repo
     elif env.repo_type == 'hg':
@@ -44,12 +43,8 @@ def setup_env():
         run('mkdir -p %s' % env.host_site_path)
     with cd(env.host_site_path):
         with hide('running', 'stdout'):
-            run('mkdir changesets')
-            run('mkdir files')
-            run('mkdir logs')
-            run('touch logs/access.log')
-            run('touch logs/error.log')
-            run('mkdir private')
+            run('mkdir changesets files logs private')
+            run('touch logs/access.log logs/error.log')
             print('+ Cloning repository: %s' % env.repo_url)
             run('%s clone %s private/repo' % (env.repo_type, env.repo_url))
             url = prompt('Please enter the site url (ex: qa4.dev.ombuweb.com): ')
