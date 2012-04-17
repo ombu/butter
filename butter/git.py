@@ -20,3 +20,13 @@ def checkout(parsed_ref):
         run('git reset --hard %s' % parsed_ref)
         run('git submodule update --init --recursive')
         run('rm -rf .git*')
+
+def checkout_simple(parsed_ref):
+    """ checksout a ref from `private/repo` into `public` """
+    print('+ Preparing %s for deployment' % parsed_ref)
+    run('rm -rf %s/*' % env.host_site_path)
+    run('git clone %s %s' % (env.repo, env.host_site_path))
+    with cd(env.host_site_path):
+        run('git reset --hard %s' % parsed_ref)
+        run('git submodule update --init --recursive')
+        run('rm -rf .git*')

@@ -1,0 +1,13 @@
+Butter.egg-info/PKG-INFO
+Butter.egg-info/SOURCES.txt
+Butter.egg-info/dependency_links.txt
+Butter.egg-info/requires.txt
+Butter.egg-info/top_level.txt
+butter/__init__.py
+butter/deploy.py
+butter/drupal.py
+butter/drush.py
+butter/fabfile.py
+butter/git.py
+butter/hg.py
+butter/host.py
