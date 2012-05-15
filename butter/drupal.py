@@ -47,8 +47,9 @@ def setup_env():
             run('touch logs/access.log logs/error.log')
             print('+ Cloning repository: %s' % env.repo_url)
             run('%s clone %s private/repo' % (env.repo_type, env.repo_url))
-            url = prompt('Please enter the site url (ex: qa4.dev.ombuweb.com): ')
-            virtual_host = 'private/%s' % url
+            if not 'url' in env:
+                env.url = prompt('Please enter the site url (ex: qa4.dev.ombuweb.com): ')
+            virtual_host = 'private/%s' % env.url
             if files.exists(virtual_host):
                 run('rm %s' % virtual_host)
             virtual_host_contents = """<VirtualHost *:80>
@@ -81,7 +82,7 @@ def setup_env():
             files.append(virtual_host, virtual_host_contents);
             files.sed(virtual_host, '%%host_site_path%%', env.host_site_path)
             files.sed(virtual_host, '%%host_type%%', env.host_type)
-            files.sed(virtual_host, '%%url%%', url)
+            files.sed(virtual_host, '%%url%%', env.url)
             run('rm %s.bak' % virtual_host)
     print('+ Site directory structure created at: %s' % env.host_site_path)
 
@@ -179,4 +180,4 @@ def pull(to='local'):
 def rebuild():
     print('Rebuilding the site profile')
     with cd(env.host_site_path + '/current'):
-      run("""sh ../private/reset.sh -d""")
+      run("""sh ../private/reset.sh -d""", shell=True)
