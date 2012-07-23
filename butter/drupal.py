@@ -1,5 +1,5 @@
 from __future__ import with_statement
-from fabric.api import task, env, cd, hide
+from fabric.api import task, env, cd, hide, execute
 from fabric.operations import run, prompt
 from fabric.contrib import files
 from fabric.contrib import console
@@ -145,8 +145,11 @@ def pull(to='local'):
     import getpass
     from fabric.api import hide
     from fabric.operations import get, put, local
+    # prompt upfront
     mysql_from = getpass.getpass('Enter the MySQL root password of the `from` server:')
     mysql_to = getpass.getpass('Enter the MySQL root password of the `to` server:')
+    if to == 'local':
+        local_db = prompt('Please enter the name of the local database: ')
     sqldump = '/tmp/foobar.sql.gz'
     with hide('running'):
         run('mysqldump -uroot -p%s %s | gzip > %s' % (mysql_from, env.db_db, sqldump))
@@ -155,8 +158,9 @@ def pull(to='local'):
     remote_files = '%s/current/sites/default/files/' % env.host_site_path
 
     if to == 'local':
-        local("echo 'drop database if exists pmount; create database pmount;' | mysql -u root -p%s" % mysql_to)
-        local("gunzip -c %s | mysql -uroot -p%s -Dpmount" % (sqldump, mysql_to))
+        local("echo 'drop database if exists %s; create database %s;' | mysql -u root -p%s" % (local_db, local_db, mysql_to))
+        local("gunzip -c %s | mysql -uroot -p%s -D%s" % (sqldump, mysql_to,
+            local_db))
         local("rm %s" % sqldump)
         local_files = 'public/sites/default/files/'
         local("""rsync --human-readable --archive --backup --progress \
@@ -166,10 +170,11 @@ def pull(to='local'):
     else:
         import sys
         # call the environment
-        locals()[to]()
+        execute(to)
         put(sqldump, sqldump)
-        run("echo 'drop database if exists pmount; create database pmount;' | mysql -u root -p%s" % mysql_to)
-        run("gunzip -c %s | mysql -uroot -p%s -Dpmount" % (sqldump, mysql_to))
+        run("echo 'drop database if exists %s; create database %s;' | mysql -u root -p%s" % (env.db_db, env.db_db, mysql_to))
+        run("gunzip -c %s | mysql -uroot -p%s -D%s" % (sqldump, mysql_to,
+            env.db_db))
         run("rm %s" % sqldump)
         run("""rsync --human-readable --archive --backup --progress \
                 --rsh='ssh -p %s' --compress %s@%s:%s %s/files/     \
