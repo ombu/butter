@@ -186,3 +186,29 @@ def rebuild():
     print('Rebuilding the site profile')
     with cd(env.host_site_path + '/current'):
       run("""sh ../private/reset.sh -d""", shell=True)
+
+@task
+def build(dev='no'):
+    """
+    Build Drupal site profile (warning: this will delete your current site database)
+    """
+    print('Rebuilding the site')
+
+    if 'host_site_path' in env:
+      cd(env.host_site_path)
+
+    # If there's no host defined, assume localhost and run tasks locally.
+    if not env.hosts:
+      from fabric.operations import local
+      from fabric.api import lcd
+      run = local
+      cd = lcd
+
+    with cd(env.public_path):
+      run("drush si --yes %s --site-name='%s' --site-mail='%s' --account-name='%s' --account-pass='%s' --account-mail='%s'" %
+          (env.site_profile, env.site_name, 'example@ombuweb.com', 'system', 'pass', 'example@ombuweb.com'))
+      run("chmod 755 sites/default")
+      run("chmod 644 sites/default/settings.php")
+      if dev == 'yes':
+        run("drush cc all")
+        run("drush en -y %s" % env.dev_modules)
