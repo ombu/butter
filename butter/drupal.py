@@ -210,5 +210,5 @@ def build(dev='no'):
       run("chmod 755 sites/default")
       run("chmod 644 sites/default/settings.php")
       if dev == 'yes':
-        run("drush cc all")
         run("drush en -y %s" % env.dev_modules)
+        run("drush cc all")
