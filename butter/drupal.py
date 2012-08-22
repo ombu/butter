@@ -183,6 +183,10 @@ def pull(to='local'):
 
 @task
 def rebuild():
+    """
+    DEPRECATED. Use `drupal.build` instead. This task is leftin the codebase
+    for compatibility with site builds that rely on reset.sh.
+    """
     print('Rebuilding the site profile')
     with cd(env.host_site_path + '/current'):
       run("""sh ../private/reset.sh -d""", shell=True)
@@ -190,7 +194,8 @@ def rebuild():
 @task
 def build(dev='no'):
     """
-    Build Drupal site profile (warning: this will delete your current site database)
+    Build Drupal site profile (warning: this will delete your current site
+    database)
     """
     print('Rebuilding the site')
 
