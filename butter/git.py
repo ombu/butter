@@ -14,11 +14,12 @@ def check_commit(ref):
 
 def checkout(parsed_ref):
     print('+ Preparing %s for deployment' % parsed_ref)
+    with cd(env.host_site_path + '/private/repo'):
+        run("""git reset --hard %s && git submodule update --init \
+                --recursive""" % parsed_ref)
     with cd(env.host_site_path):
-        run('git clone private/repo changesets/%s' % parsed_ref)
+        run("cp -r private/repo changesets/%s" % parsed_ref)
     with cd('%s/changesets/%s' % (env.host_site_path, parsed_ref)):
-        run('git reset --hard %s' % parsed_ref)
-        run('git submodule update --init --recursive')
         run('rm -rf .git*')
 
 def checkout_simple(parsed_ref):
