@@ -17,6 +17,7 @@ def push(ref):
     elif env.repo_type == 'hg':
         from butter import hg as repo
     parsed_ref = repo.check_commit(ref)
+    deploy.clean()
     build_path = '%s/changesets/%s' % (env.host_site_path, parsed_ref)
     pre_clean(build_path)
     repo.checkout(parsed_ref)
