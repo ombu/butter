@@ -1,5 +1,5 @@
 from __future__ import with_statement
-from fabric.api import task, env, cd, hide, execute
+from fabric.api import task, env, cd, hide, execute, settings
 from fabric.operations import run, prompt
 from fabric.contrib import files
 from fabric.contrib import console
@@ -138,48 +138,89 @@ def set_files_perms():
         sudo('chmod -R 2770 files')
 
 @task
-def pull(to='local'):
+def pull(src, dst):
     """
     Moves drupal sites between servers
     """
     import getpass
     from fabric.api import hide
     from fabric.operations import get, put, local
+    from copy import copy
+
     # prompt upfront
-    mysql_from = getpass.getpass('Enter the MySQL root password of the `from` server:')
-    mysql_to = getpass.getpass('Enter the MySQL root password of the `to` server:')
-    if to == 'local':
+    mysql_src_pw = getpass.getpass(
+        'Enter the MySQL root password of the `from` server:'
+    )
+    mysql_dst_pw = getpass.getpass(
+        'Enter the MySQL root password of the `to` server:'
+    )
+    if dst == 'local':
         local_db = prompt('Please enter the name of the local database: ')
-    sqldump = '/tmp/foobar.sql.gz'
-    with hide('running'):
-        run('mysqldump -uroot -p%s %s | gzip > %s' % (mysql_from, env.db_db, sqldump))
-    get(sqldump, sqldump)
 
-    remote_files = '%s/current/sites/default/files/' % env.host_site_path
+    # record the environments
+    execute(dst)
+    dst_env = copy(env)
+    execute(src)
+    src_env = copy(env)
+    import pprint
+    pp = pprint.PrettyPrinter(indent=4)
 
-    if to == 'local':
-        local("echo 'drop database if exists %s; create database %s;' | mysql -u root -p%s" % (local_db, local_db, mysql_to))
-        local("gunzip -c %s | mysql -uroot -p%s -D%s" % (sqldump, mysql_to,
-            local_db))
+    # helper vars
+    sqldump = '/tmp/src_%s.sql.gz' % env.db_db
+    src_files = '%s/current/sites/default/files/' % src_env.host_site_path
+
+    # grab a db dump
+    with settings(host_string=src_env.hosts[0]):
+        run('mysqldump -uroot -p%s %s | gzip > %s' %
+                (mysql_src_pw, env.db_db, sqldump))
+        get(sqldump, sqldump)
+
+    # Pulling remote to local
+    if dst == 'local':
+        local("""echo 'drop database if exists %s; create database %s;' \
+        | mysql -u root -p%s""" % (dst_env.db_db, dst_env.db_db, mysql_dst_pw))
+        local("gunzip -c %s | mysql -uroot -p%s -D%s" % (sqldump, mysql_dst_pw,
+            dst_env.db_db))
         local("rm %s" % sqldump)
-        local_files = 'public/sites/default/files/'
+        dst_files = dst_env.public_path + '/sites/default/files/'
         local("""rsync --human-readable --archive --backup --progress \
                 --rsh='ssh -p %s' --compress %s@%s:%s %s      \
-                --exclude=css --exclude=js --exclude=styles
-              """ % (env.port, env.user, env.host, remote_files, local_files))
+                --exclude=css --exclude=js --exclude=styles"""
+            % (src_env.port, src_env.user, src_env.host, src_files, dst_files))
+
+    # Source and destination environments are in the same host
+    elif src_env.hosts[0] == dst_env.hosts[0]:
+        with settings(host_string=dst_env.hosts[0]):
+            run("""echo 'drop database if exists %s; create database %s;' \
+                | mysql -uroot -p%s""" % (dst_env.db_db, dst_env.db_db,
+                mysql_dst_pw))
+            run("gunzip -c %s | mysql -uroot -p%s -D%s" %
+                (sqldump, mysql_dst_pw, dst_env.db_db))
+            run("rm %s" % sqldump)
+            dst_files = '%s/%s/sites/default/files/' % (dst_env.host_site_path,
+                    dst_env.public_path)
+            run("""rsync --human-readable --archive --backup --progress \
+                    --compress %s %s \
+                    --exclude=css --exclude=js --exclude=styles
+                    """ % (src_files, dst_files))
+
+    # Pulling remote to remote & remote servers are not the same host
     else:
-        import sys
-        # call the environment
-        execute(to)
-        put(sqldump, sqldump)
-        run("echo 'drop database if exists %s; create database %s;' | mysql -u root -p%s" % (env.db_db, env.db_db, mysql_to))
-        run("gunzip -c %s | mysql -uroot -p%s -D%s" % (sqldump, mysql_to,
-            env.db_db))
-        run("rm %s" % sqldump)
-        run("""rsync --human-readable --archive --backup --progress \
-                --rsh='ssh -p %s' --compress %s@%s:%s %s/files/     \
-                --exclude=css --exclude=js --exclude=styles
-                """ % (env.port, env.user, env.host, remote_files, env.host_site_path))
+        with settings(host_string=dst_env.hosts[0]):
+            put(sqldump, sqldump)
+            run("""echo 'drop database if exists %s; create database %s;' \
+                | mysql -u oot -p%s""" % (dst_env.db_db, dst_env.db_db,
+                mysql_dst_pw))
+            run("gunzip -c %s | mysql -uroot -p%s -D%s" %
+                (sqldump, mysql_dst_pw, dst_env.db_db))
+            run("rm %s" % sqldump)
+            dst_files = '%s/%s/sites/default/files/' % (dst_env.host_site_path,
+                    dst_env.public_path)
+            run("""rsync --human-readable --archive --backup --progress \
+                    --rsh='ssh -p %s' --compress %s:%s %s     \
+                    --exclude=css --exclude=js --exclude=styles
+                    """ % (src_env.port, src_env.hosts[0], src_files,
+                        dst_files))
 
 @task
 def rebuild():
