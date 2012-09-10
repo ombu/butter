@@ -169,22 +169,17 @@ def pull(to='local'):
               """ % (env.port, env.user, env.host, remote_files, local_files))
     else:
         import sys
-        from copy import copy
-        from fabric.api import abort
         # call the environment
-        source_env = copy(env)
         execute(to)
-        #del(env.host_string)
-
         put(sqldump, sqldump)
         run("echo 'drop database if exists %s; create database %s;' | mysql -u root -p%s" % (env.db_db, env.db_db, mysql_to))
         run("gunzip -c %s | mysql -uroot -p%s -D%s" % (sqldump, mysql_to,
             env.db_db))
         run("rm %s" % sqldump)
         run("""rsync --human-readable --archive --backup --progress \
-                --rsh='ssh -p %s' --compress %s:%s %s/files/     \
+                --rsh='ssh -p %s' --compress %s@%s:%s %s/files/     \
                 --exclude=css --exclude=js --exclude=styles
-                """ % (source_env.port, source_env.host, remote_files, env.host_site_path))
+                """ % (env.port, env.user, env.host, remote_files, env.host_site_path))
 
 @task
 def rebuild():
