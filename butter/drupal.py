@@ -162,8 +162,6 @@ def pull(src, dst):
     dst_env = copy(env)
     execute(src)
     src_env = copy(env)
-    import pprint
-    pp = pprint.PrettyPrinter(indent=4)
 
     # helper vars
     sqldump = '/tmp/src_%s.sql.gz' % env.db_db
