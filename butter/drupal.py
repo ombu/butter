@@ -184,9 +184,9 @@ def pull(src, dst):
         local("rm %s" % sqldump)
         dst_files = dst_env.public_path + '/sites/default/files/'
         local("""rsync --human-readable --archive --backup --progress \
-                --rsh='ssh -p %s' --compress %s:%s %s     \
+                --rsh='ssh -p %s' --compress %s@%s:%s %s     \
                 --exclude=css --exclude=js --exclude=styles
-                """ % (src_host.port, src_host.hostname, src_files,
+                """ % (src_host.port, src_env.user, src_host.hostname, src_files,
                     dst_files))
 
     # Source and destination environments are in the same host
@@ -210,7 +210,7 @@ def pull(src, dst):
         with settings(host_string=dst_env.hosts[0]):
             put(sqldump, sqldump)
             run("""echo 'drop database if exists %s; create database %s;' \
-                | mysql -u oot -p%s""" % (dst_env.db_db, dst_env.db_db,
+                | mysql -u root -p%s""" % (dst_env.db_db, dst_env.db_db,
                 mysql_dst_pw))
             run("gunzip -c %s | mysql -uroot -p%s -D%s" %
                 (sqldump, mysql_dst_pw, dst_env.db_db))
@@ -218,9 +218,9 @@ def pull(src, dst):
             dst_files = '%s/%s/sites/default/files/' % (dst_env.host_site_path,
                     dst_env.public_path)
             run("""rsync --human-readable --archive --backup --progress \
-                    --rsh='ssh -p %s' --compress %s:%s %s     \
+                    --rsh='ssh -p %s' --compress %s@%s:%s %s     \
                     --exclude=css --exclude=js --exclude=styles
-                    """ % (src_env.port, src_env.hosts[0], src_files,
+                    """ % (src_host.port, src_env.user, src_host.hostname, src_files,
                         dst_files))
 
 @task
