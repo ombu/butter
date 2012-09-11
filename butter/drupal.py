@@ -113,7 +113,7 @@ def set_perms(build_path):
         run('chown -R %s private logs %s' % (env.user, build_path))
         run('chgrp -R %s %s' % (env.host_webserver_user, build_path))
         run('chmod -R 2750 %s' % build_path)
-        run('chmod -R 0700 private logs')
+        run('chmod 0700 private logs')
         run('chmod 0440 %s/public/sites/default/settings*' % build_path)
 
 def link_files(build_path):
