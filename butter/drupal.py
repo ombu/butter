@@ -3,6 +3,7 @@ from fabric.api import task, env, cd, hide, execute, settings
 from fabric.operations import run, prompt
 from fabric.contrib import files
 from fabric.contrib import console
+from urlparse import urlparse
 from butter import deploy
 from butter.host import pre_clean
 
@@ -149,13 +150,11 @@ def pull(src, dst):
 
     # prompt upfront
     mysql_src_pw = getpass.getpass(
-        'Enter the MySQL root password of the `from` server:'
+        'Enter the MySQL root password for `src`:'
     )
     mysql_dst_pw = getpass.getpass(
-        'Enter the MySQL root password of the `to` server:'
+        'Enter the MySQL root password for `dst`:'
     )
-    if dst == 'local':
-        local_db = prompt('Please enter the name of the local database: ')
 
     # record the environments
     execute(dst)
@@ -173,6 +172,9 @@ def pull(src, dst):
                 (mysql_src_pw, env.db_db, sqldump))
         get(sqldump, sqldump)
 
+    # parse src
+    src_host = urlparse('ssh://' + src_env.hosts[0])
+
     # Pulling remote to local
     if dst == 'local':
         local("""echo 'drop database if exists %s; create database %s;' \
@@ -182,9 +184,10 @@ def pull(src, dst):
         local("rm %s" % sqldump)
         dst_files = dst_env.public_path + '/sites/default/files/'
         local("""rsync --human-readable --archive --backup --progress \
-                --rsh='ssh -p %s' --compress %s@%s:%s %s      \
-                --exclude=css --exclude=js --exclude=styles"""
-            % (src_env.port, src_env.user, src_env.host, src_files, dst_files))
+                --rsh='ssh -p %s' --compress %s:%s %s     \
+                --exclude=css --exclude=js --exclude=styles
+                """ % (src_host.port, src_host.hostname, src_files,
+                    dst_files))
 
     # Source and destination environments are in the same host
     elif src_env.hosts[0] == dst_env.hosts[0]:
