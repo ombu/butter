@@ -17,6 +17,7 @@ def push(ref):
     elif env.repo_type == 'hg':
         from butter import hg as repo
     parsed_ref = repo.check_commit(ref)
+    deploy.clean()
     build_path = '%s/changesets/%s' % (env.host_site_path, parsed_ref)
     pre_clean(build_path)
     repo.checkout(parsed_ref)
@@ -107,15 +108,13 @@ def settings_php(build_path):
             abort('Could not find %s' % file)
 
 def set_perms(build_path):
-    from fabric.api import sudo
-    print('+ Setting file permissions')
+    print('+ Setting Drupal permissions')
     with cd(env.host_site_path):
-        sudo('chown -R %s private logs files %s' % (env.user, build_path))
-        sudo('chgrp -R %s files %s' % (env.host_webserver_user, build_path))
-        sudo('chmod -R 2750 %s' % build_path)
-        sudo('chmod -R 2770 files')
-        sudo('chmod -R 0700 private logs')
-        sudo('chmod 0440 %s/public/sites/default/settings*' % build_path)
+        run('chown -R %s private logs %s' % (env.user, build_path))
+        run('chgrp -R %s %s' % (env.host_webserver_user, build_path))
+        run('chmod -R 2750 %s' % build_path)
+        run('chmod -R 0700 private logs')
+        run('chmod 0440 %s/public/sites/default/settings*' % build_path)
 
 def link_files(build_path):
     print('+ Creating symlinks')
@@ -133,9 +132,9 @@ def set_files_perms():
     """
     print('+ Setting permissions for the files directory')
     with cd(env.host_site_path):
-        sudo('chown -R %s files' % env.user)
-        sudo('chgrp -R %s files' % env.host_webserver_user)
-        sudo('chmod -R 2770 files')
+        run('chown -R %s files' % env.user)
+        run('chgrp -R %s files' % env.host_webserver_user)
+        run('chmod -R 2770 files')
 
 @task
 def pull(src, dst):
@@ -257,3 +256,11 @@ def build(dev='no'):
         if dev == 'yes':
             run_function("drush en -y %s" % env.dev_modules)
             run_function("drush cc all")
+
+@task
+def force_files_perms():
+    from fabric.api import sudo
+    print('+ Setting file permissions with sudo')
+    with cd(env.host_site_path):
+        sudo('chown -R %s:%s files' % (env.user, env.host_webserver_user))
+        sudo('chmod -R 2770 files')
