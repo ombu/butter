@@ -127,17 +127,6 @@ def link_files(build_path):
         run('ln -s %s/public current' % build_path)
 
 @task
-def set_files_perms():
-    """
-    Sets proper permissions on site fiies dire
-    """
-    print('+ Setting permissions for the files directory')
-    with cd(env.host_site_path):
-        run('chown -R %s files' % env.user)
-        run('chgrp -R %s files' % env.host_webserver_user)
-        run('chmod -R 2770 files')
-
-@task
 def pull(src, dst):
     """
     Moves drupal sites between servers
@@ -265,5 +254,4 @@ def force_files_perms():
     from fabric.api import sudo
     print('+ Setting file permissions with sudo')
     with cd(env.host_site_path):
-        sudo('chown -R %s:%s files' % (env.user, env.host_webserver_user))
-        sudo('chmod -R 2770 files')
+        sudo('chown -R %s:%s files && chmod -R 2770 files' % (env.user, env.host_webserver_user))
