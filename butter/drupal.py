@@ -111,10 +111,10 @@ def settings_php(build_path):
 def set_perms(build_path):
     print('+ Setting Drupal permissions')
     with cd(env.host_site_path):
-        run('chown -R %s private logs %s' % (env.user, build_path))
-        run('chgrp -R %s %s' % (env.host_webserver_user, build_path))
+        run('chown %s:%s %s && chgrp -R %s %s' % (env.user,
+            env.host_webserver_user, build_path, env.host_webserver_user,
+            build_path))
         run('chmod -R 2750 %s' % build_path)
-        run('chmod 0700 private logs')
         run('chmod 0440 %s/public/sites/default/settings*' % build_path)
 
 def link_files(build_path):
@@ -250,8 +250,12 @@ def build(dev='no'):
             run_function("drush cc all")
 
 @task
-def force_files_perms():
+def enforce_perms():
     from fabric.api import sudo
     print('+ Setting file permissions with sudo')
     with cd(env.host_site_path):
-        sudo('chown -R %s:%s files && chmod -R 2770 files' % (env.user, env.host_webserver_user))
+        sudo('chown -R %s:%s private logs && chmod 0700 private logs' %
+                (env.user, env.user))
+        sudo('if [ -d private/ssl ]; then chown root:admin private/ssl; fi')
+        sudo('chown -R %s:%s files && chmod -R 2770 files' % (env.user,
+            env.host_webserver_user))
