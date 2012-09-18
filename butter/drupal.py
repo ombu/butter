@@ -222,7 +222,7 @@ def rebuild():
         run("""sh ../private/reset.sh -d""", shell=True)
 
 @task
-def build(dev='no'):
+def build(dev='yes'):
     """
     Build Drupal site profile (warning: this will delete your current site
     database)
