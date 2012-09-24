@@ -134,14 +134,22 @@ def pull(src, dst):
     import getpass
     from fabric.api import hide
     from fabric.operations import get, put, local
+    from fabric.utils import abort
+    from fabric.colors import blue
     from copy import copy
+
+    # Really make sure user wants to push to production.
+    if dst == 'production':
+      force_push = prompt('Are you sure you want to push to production (WARNING: this will destroy production db):', None, 'n', 'y|n')
+      if force_push == 'n':
+        abort('Pull aborted')
 
     # prompt upfront
     mysql_src_pw = getpass.getpass(
-        'Enter the MySQL root password for `src`:'
+        'Enter the MySQL root password for `src` ' + blue('%s' % (src) + ':')
     )
     mysql_dst_pw = getpass.getpass(
-        'Enter the MySQL root password for `dst`:'
+        'Enter the MySQL root password for `dst` ' + blue('%s' % (dst) + ':')
     )
 
     # record the environments
