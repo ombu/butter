@@ -98,6 +98,8 @@ def settings_php(build_path):
             files.sed(file, '%%DB_USER%%', env.db_user)
             files.sed(file, '%%DB_PW%%', env.db_pw)
             files.sed(file, '%%DB_HOST%%', env.db_host)
+            if env.smtp_pw:
+              files.sed(file, '%%SMTP_PW%%', env.smtp_pw)
             if 'base_url' in env:
                 files.sed(file, '%%BASE_URL%%', env.base_url)
             if files.exists('settings.php'):
