@@ -252,7 +252,7 @@ def build(dev='yes'):
 
     with cd_function(env.host_site_path + '/' + env.public_path):
         run_function("drush si --yes %s --site-name='%s' --site-mail='%s' --account-name='%s' --account-pass='%s' --account-mail='%s'" %
-                (env.site_profile, env.site_name, 'example@ombuweb.com', 'system', 'pass', 'example@ombuweb.com'))
+                (env.site_profile, env.site_name, 'noreply@ombuweb.com', 'system', 'pass', 'noreply@ombuweb.com'))
         run_function("chmod 755 sites/default")
         run_function("chmod 644 sites/default/settings.php")
         if dev == 'yes':
