@@ -129,7 +129,7 @@ def link_files(build_path):
         run('ln -s %s/public current' % build_path)
 
 @task
-def pull(src, dst):
+def sync(src, dst):
     """
     Moves drupal sites between servers
     """
@@ -144,7 +144,7 @@ def pull(src, dst):
     if dst == 'production':
       force_push = prompt('Are you sure you want to push to production (WARNING: this will destroy production db):', None, 'n', 'y|n')
       if force_push == 'n':
-        abort('Pull aborted')
+        abort('Sync aborted')
 
     # prompt upfront
     mysql_src_pw = getpass.getpass(
