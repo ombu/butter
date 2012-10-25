@@ -174,8 +174,8 @@ def sync(src, dst):
     if dst == 'local':
         local(drop_tables_sql % {"db_user": dst_env.db_user, "db_pw": dst_env.db_pw,
             "db_db": dst_env.db_db})
-        local("gunzip -c %s | mysql -u%s -p%s -D%s" % (sqldump, dst_env.db_user, dst_env.db_pw,
-            dst_env.db_db))
+        local("gunzip -c %s | mysql -u%s -p%s -D%s" % (sqldump, dst_env.db_user,
+            dst_env.db_pw, dst_env.db_db))
         local("rm %s" % sqldump)
         dst_files = dst_env.public_path + '/sites/default/files/'
         local("""rsync --human-readable --archive --backup --progress \
@@ -187,13 +187,10 @@ def sync(src, dst):
     # Source and destination environments are in the same host
     elif src_env.hosts[0] == dst_env.hosts[0]:
         with settings(host_string=dst_env.hosts[0]):
-            run("""echo 'drop database if exists %s; create database %s;' \
-                | mysql -uroot -p%s""" % (dst_env.db_db, dst_env.db_db,
-                mysql_dst_pw))
             run(drop_tables_sql % {"db_user": dst_env.db_user, "db_pw": dst_env.db_pw,
                 "db_db": dst_env.db_db})
-            run("gunzip -c %s | mysql -uroot -p%s -D%s" %
-                (sqldump, mysql_dst_pw, dst_env.db_db))
+            run("gunzip -c %s | mysql -u%s -p%s -D%s" % (sqldump, dst_env.db_user,
+                dst_env.db_pw, dst_env.db_db))
             run("rm %s" % sqldump)
             dst_files = '%s/%s/sites/default/files/' % (dst_env.host_site_path,
                     dst_env.public_path)
@@ -208,8 +205,8 @@ def sync(src, dst):
             put(sqldump, sqldump)
             run(drop_tables_sql % {"db_user": dst_env.db_user, "db_pw": dst_env.db_pw,
                 "db_db": dst_env.db_db})
-            run("gunzip -c %s | mysql -uroot -p%s -D%s" %
-                (sqldump, mysql_dst_pw, dst_env.db_db))
+            run("gunzip -c %s | mysql -u%s -p%s -D%s" % (sqldump, dst_env.db_user,
+                dst_env.db_pw, dst_env.db_db))
             run("rm %s" % sqldump)
             dst_files = '%s/%s/sites/default/files/' % (dst_env.host_site_path,
                     dst_env.public_path)
