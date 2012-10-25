@@ -146,14 +146,6 @@ def sync(src, dst):
       if force_push == 'n':
         abort('Sync aborted')
 
-    # prompt upfront
-    mysql_src_pw = getpass.getpass(
-        'Enter the MySQL root password for `src` ' + blue('%s' % (src) + ':')
-    )
-    mysql_dst_pw = getpass.getpass(
-        'Enter the MySQL root password for `dst` ' + blue('%s' % (dst) + ':')
-    )
-
     # record the environments
     execute(dst)
     dst_env = copy(env)
@@ -166,18 +158,23 @@ def sync(src, dst):
 
     # grab a db dump
     with settings(host_string=src_env.hosts[0]):
-        run('mysqldump -uroot -p%s %s | gzip > %s' %
-                (mysql_src_pw, env.db_db, sqldump))
+        run('mysqldump -u%s -p%s %s | gzip > %s' %
+                (src_env.db_user, src_env.db_pw, env.db_db, sqldump))
         get(sqldump, sqldump)
 
     # parse src
     src_host = urlparse('ssh://' + src_env.hosts[0])
 
+    drop_tables_sql = """mysql -u%(db_user)s -p%(db_pw)s -BNe "show tables" %(db_db)s \
+        | tr '\n' ',' | sed -e 's/,$//' \
+        | awk '{print "SET FOREIGN_KEY_CHECKS = 0;DROP TABLE IF EXISTS " $1 ";SET FOREIGN_KEY_CHECKS = 1;"}' \
+        | mysql -u%(db_user)s -p%(db_pw)s %(db_db)s"""
+
     # Pulling remote to local
     if dst == 'local':
-        local("""echo 'drop database if exists %s; create database %s;' \
-        | mysql -u root -p%s""" % (dst_env.db_db, dst_env.db_db, mysql_dst_pw))
-        local("gunzip -c %s | mysql -uroot -p%s -D%s" % (sqldump, mysql_dst_pw,
+        local(drop_tables_sql % {"db_user": dst_env.db_user, "db_pw": dst_env.db_pw,
+            "db_db": dst_env.db_db})
+        local("gunzip -c %s | mysql -u%s -p%s -D%s" % (sqldump, dst_env.db_user, dst_env.db_pw,
             dst_env.db_db))
         local("rm %s" % sqldump)
         dst_files = dst_env.public_path + '/sites/default/files/'
@@ -193,6 +190,8 @@ def sync(src, dst):
             run("""echo 'drop database if exists %s; create database %s;' \
                 | mysql -uroot -p%s""" % (dst_env.db_db, dst_env.db_db,
                 mysql_dst_pw))
+            run(drop_tables_sql % {"db_user": dst_env.db_user, "db_pw": dst_env.db_pw,
+                "db_db": dst_env.db_db})
             run("gunzip -c %s | mysql -uroot -p%s -D%s" %
                 (sqldump, mysql_dst_pw, dst_env.db_db))
             run("rm %s" % sqldump)
@@ -207,9 +206,8 @@ def sync(src, dst):
     else:
         with settings(host_string=dst_env.hosts[0]):
             put(sqldump, sqldump)
-            run("""echo 'drop database if exists %s; create database %s;' \
-                | mysql -u root -p%s""" % (dst_env.db_db, dst_env.db_db,
-                mysql_dst_pw))
+            run(drop_tables_sql % {"db_user": dst_env.db_user, "db_pw": dst_env.db_pw,
+                "db_db": dst_env.db_db})
             run("gunzip -c %s | mysql -uroot -p%s -D%s" %
                 (sqldump, mysql_dst_pw, dst_env.db_db))
             run("rm %s" % sqldump)
