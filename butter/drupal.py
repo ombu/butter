@@ -32,6 +32,7 @@ def setup_env():
     """
     Set up the directory structure at env.host_site_path
     """
+    from fabric.api import sudo
 
     print('+ Creating directory structure')
     if files.exists(env.host_site_path):
@@ -75,8 +76,12 @@ def setup_env():
 
     AuthType Basic
     AuthName "Protected"
-    AuthUserFile /mnt/main/qa/htpwd
+    AuthUserFile /vol/main/htpwd
     Require user dev1
+    Order deny,allow
+    Deny from all
+    Allow from 75.145.65.101
+    Satisfy any
 
   </Directory>
 
@@ -86,6 +91,9 @@ def setup_env():
             files.sed(virtual_host, '%%host_type%%', env.host_type)
             files.sed(virtual_host, '%%url%%', env.url)
             run('rm %s.bak' % virtual_host)
+            sudo('if [ ! -L /etc/apache2/sites-available/%s ]; then  ln -s %s /etc/apache2/sites-available/%s; fi' % (env.url, env.host_site_path + '/' + virtual_host, env.url))
+            sudo('if [ ! -L /etc/apache2/sites-enabled/%(url)s]; then ln -s ../sites-available/%(url)s /etc/apache2/sites-enabled/%(url)s; fi' % env)
+            sudo('service apache2 force-reload')
     print('+ Site directory structure created at: %s' % env.host_site_path)
 
 
