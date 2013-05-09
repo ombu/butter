@@ -129,9 +129,11 @@ def set_perms(build_path):
 
 def link_files(build_path):
     print('+ Creating symlinks')
-    with cd('%s/public/sites/default' % build_path):
-        run('rm -rf files')
-        run('ln -s ../../../../../files files')
+    if not 'files_path' in env:
+        env.files_path = 'public/sites/default/files'
+    with cd(build_path):
+        run('rm -rf %s' % env.files_path)
+        run('ln -s %s/files %s' % (env.host_site_path, env.files_path))
     with cd(env.host_site_path):
         run('if [ -h current ] ; then unlink current ; fi')
         run('ln -s %s/public current' % build_path)
