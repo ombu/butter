@@ -1,8 +1,9 @@
 from __future__ import with_statement
-from fabric.api import task, env, cd, hide, execute
+from fabric.api import task, env, cd, hide, execute, settings
 from fabric.operations import run, prompt
 from fabric.contrib import files
 from fabric.contrib import console
+from urlparse import urlparse
 from butter import deploy
 from butter.host import pre_clean
 
@@ -17,6 +18,7 @@ def push(ref):
     elif env.repo_type == 'hg':
         from butter import hg as repo
     parsed_ref = repo.check_commit(ref)
+    deploy.clean()
     build_path = '%s/changesets/%s' % (env.host_site_path, parsed_ref)
     pre_clean(build_path)
     repo.checkout(parsed_ref)
@@ -30,6 +32,7 @@ def setup_env():
     """
     Set up the directory structure at env.host_site_path
     """
+    from fabric.api import sudo
 
     print('+ Creating directory structure')
     if files.exists(env.host_site_path):
@@ -73,8 +76,12 @@ def setup_env():
 
     AuthType Basic
     AuthName "Protected"
-    AuthUserFile /mnt/main/qa/htpwd
+    AuthUserFile /vol/main/htpwd
     Require user dev1
+    Order deny,allow
+    Deny from all
+    Allow from 75.145.65.101
+    Satisfy any
 
   </Directory>
 
@@ -84,6 +91,9 @@ def setup_env():
             files.sed(virtual_host, '%%host_type%%', env.host_type)
             files.sed(virtual_host, '%%url%%', env.url)
             run('rm %s.bak' % virtual_host)
+            sudo('if [ ! -L /etc/apache2/sites-available/%s ]; then  ln -s %s /etc/apache2/sites-available/%s; fi' % (env.url, env.host_site_path + '/' + virtual_host, env.url))
+            sudo('if [ ! -L /etc/apache2/sites-enabled/%(url)s]; then ln -s ../sites-available/%(url)s /etc/apache2/sites-enabled/%(url)s; fi' % env)
+            sudo('service apache2 force-reload')
     print('+ Site directory structure created at: %s' % env.host_site_path)
 
 
@@ -96,6 +106,8 @@ def settings_php(build_path):
             files.sed(file, '%%DB_USER%%', env.db_user)
             files.sed(file, '%%DB_PW%%', env.db_pw)
             files.sed(file, '%%DB_HOST%%', env.db_host)
+            if 'smtp_pw' in env:
+              files.sed(file, '%%SMTP_PW%%', env.smtp_pw)
             if 'base_url' in env:
                 files.sed(file, '%%BASE_URL%%', env.base_url)
             if files.exists('settings.php'):
@@ -107,79 +119,112 @@ def settings_php(build_path):
             abort('Could not find %s' % file)
 
 def set_perms(build_path):
-    from fabric.api import sudo
-    print('+ Setting file permissions')
+    print('+ Setting Drupal permissions')
     with cd(env.host_site_path):
-        sudo('chown -R %s private logs files %s' % (env.user, build_path))
-        sudo('chgrp -R %s files %s' % (env.host_webserver_user, build_path))
-        sudo('chmod -R 2750 %s' % build_path)
-        sudo('chmod -R 2770 files')
-        sudo('chmod -R 0700 private logs')
-        sudo('chmod 0440 %s/public/sites/default/settings*' % build_path)
+        run('chown %s:%s %s && chgrp -R %s %s' % (env.user,
+            env.host_webserver_user, build_path, env.host_webserver_user,
+            build_path))
+        run('chmod -R 2750 %s' % build_path)
+        run('chmod 0440 %s/public/sites/default/settings*' % build_path)
 
 def link_files(build_path):
     print('+ Creating symlinks')
-    with cd('%s/public/sites/default' % build_path):
-        run('rm -rf files')
-        run('ln -s ../../../../../files files')
+    if not 'files_path' in env:
+        env.files_path = 'public/sites/default/files'
+    with cd(build_path):
+        run('rm -rf %s' % env.files_path)
+        run('ln -s %s/files %s' % (env.host_site_path, env.files_path))
     with cd(env.host_site_path):
         run('if [ -h current ] ; then unlink current ; fi')
         run('ln -s %s/public current' % build_path)
 
 @task
-def set_files_perms():
-    """
-    Sets proper permissions on site fiies dire
-    """
-    print('+ Setting permissions for the files directory')
-    with cd(env.host_site_path):
-        sudo('chown -R %s files' % env.user)
-        sudo('chgrp -R %s files' % env.host_webserver_user)
-        sudo('chmod -R 2770 files')
-
-@task
-def pull(to='local'):
+def sync(src, dst):
     """
     Moves drupal sites between servers
     """
     import getpass
     from fabric.api import hide
     from fabric.operations import get, put, local
-    # prompt upfront
-    mysql_from = getpass.getpass('Enter the MySQL root password of the `from` server:')
-    mysql_to = getpass.getpass('Enter the MySQL root password of the `to` server:')
-    if to == 'local':
-        local_db = prompt('Please enter the name of the local database: ')
-    sqldump = '/tmp/foobar.sql.gz'
-    with hide('running'):
-        run('mysqldump -uroot -p%s %s | gzip > %s' % (mysql_from, env.db_db, sqldump))
-    get(sqldump, sqldump)
+    from fabric.utils import abort
+    from fabric.colors import blue
+    from copy import copy
 
-    remote_files = '%s/current/sites/default/files/' % env.host_site_path
+    # Really make sure user wants to push to production.
+    if dst == 'production':
+      force_push = prompt('Are you sure you want to push to production (WARNING: this will destroy production db):', None, 'n', 'y|n')
+      if force_push == 'n':
+        abort('Sync aborted')
 
-    if to == 'local':
-        local("echo 'drop database if exists %s; create database %s;' | mysql -u root -p%s" % (local_db, local_db, mysql_to))
-        local("gunzip -c %s | mysql -uroot -p%s -D%s" % (sqldump, mysql_to,
-            local_db))
+    # record the environments
+    execute(dst)
+    dst_env = copy(env)
+    execute(src)
+    src_env = copy(env)
+
+    # helper vars
+    sqldump = '/tmp/src_%s.sql.gz' % env.db_db
+    src_files = '%s/current/sites/default/files/' % src_env.host_site_path
+
+    # grab a db dump
+    with settings(host_string=src_env.hosts[0]):
+        run('mysqldump -u%s -p%s %s | gzip > %s' %
+                (src_env.db_user, src_env.db_pw, env.db_db, sqldump))
+        get(sqldump, sqldump)
+
+    # parse src
+    src_host = urlparse('ssh://' + src_env.hosts[0])
+
+    drop_tables_sql = """mysql -u%(db_user)s -p%(db_pw)s -BNe "show tables" %(db_db)s \
+        | tr '\n' ',' | sed -e 's/,$//' \
+        | awk '{print "SET FOREIGN_KEY_CHECKS = 0;DROP TABLE IF EXISTS " $1 ";SET FOREIGN_KEY_CHECKS = 1;"}' \
+        | mysql -u%(db_user)s -p%(db_pw)s %(db_db)s"""
+
+    # Pulling remote to local
+    if dst == 'local':
+        local(drop_tables_sql % {"db_user": dst_env.db_user, "db_pw": dst_env.db_pw,
+            "db_db": dst_env.db_db})
+        local("gunzip -c %s | mysql -u%s -p%s -D%s" % (sqldump, dst_env.db_user,
+            dst_env.db_pw, dst_env.db_db))
         local("rm %s" % sqldump)
-        local_files = 'public/sites/default/files/'
+        dst_files = dst_env.public_path + '/sites/default/files/'
         local("""rsync --human-readable --archive --backup --progress \
-                --rsh='ssh -p %s' --compress %s@%s:%s %s      \
+                --rsh='ssh -p %s' --compress %s@%s:%s %s     \
                 --exclude=css --exclude=js --exclude=styles
-              """ % (env.port, env.user, env.host, remote_files, local_files))
+                """ % (src_host.port, src_env.user, src_host.hostname, src_files,
+                    dst_files))
+
+    # Source and destination environments are in the same host
+    elif src_env.hosts[0] == dst_env.hosts[0]:
+        with settings(host_string=dst_env.hosts[0]):
+            run(drop_tables_sql % {"db_user": dst_env.db_user, "db_pw": dst_env.db_pw,
+                "db_db": dst_env.db_db})
+            run("gunzip -c %s | mysql -u%s -p%s -D%s" % (sqldump, dst_env.db_user,
+                dst_env.db_pw, dst_env.db_db))
+            run("rm %s" % sqldump)
+            dst_files = '%s/%s/sites/default/files/' % (dst_env.host_site_path,
+                    dst_env.public_path)
+            run("""rsync --human-readable --archive --backup --progress \
+                    --compress %s %s \
+                    --exclude=css --exclude=js --exclude=styles
+                    """ % (src_files, dst_files))
+
+    # Pulling remote to remote & remote servers are not the same host
     else:
-        import sys
-        # call the environment
-        execute(to)
-        put(sqldump, sqldump)
-        run("echo 'drop database if exists %s; create database %s;' | mysql -u root -p%s" % (env.db_db, env.db_db, mysql_to))
-        run("gunzip -c %s | mysql -uroot -p%s -D%s" % (sqldump, mysql_to,
-            env.db_db))
-        run("rm %s" % sqldump)
-        run("""rsync --human-readable --archive --backup --progress \
-                --rsh='ssh -p %s' --compress %s@%s:%s %s/files/     \
-                --exclude=css --exclude=js --exclude=styles
-                """ % (env.port, env.user, env.host, remote_files, env.host_site_path))
+        with settings(host_string=dst_env.hosts[0]):
+            put(sqldump, sqldump)
+            run(drop_tables_sql % {"db_user": dst_env.db_user, "db_pw": dst_env.db_pw,
+                "db_db": dst_env.db_db})
+            run("gunzip -c %s | mysql -u%s -p%s -D%s" % (sqldump, dst_env.db_user,
+                dst_env.db_pw, dst_env.db_db))
+            run("rm %s" % sqldump)
+            dst_files = '%s/%s/sites/default/files/' % (dst_env.host_site_path,
+                    dst_env.public_path)
+            run("""rsync --human-readable --archive --backup --progress \
+                    --rsh='ssh -p %s' --compress %s@%s:%s %s     \
+                    --exclude=css --exclude=js --exclude=styles
+                    """ % (src_host.port, src_env.user, src_host.hostname, src_files,
+                        dst_files))
 
 @task
 def rebuild():
@@ -192,7 +237,7 @@ def rebuild():
         run("""sh ../private/reset.sh -d""", shell=True)
 
 @task
-def build(dev='no'):
+def build(dev='yes'):
     """
     Build Drupal site profile (warning: this will delete your current site
     database)
@@ -212,9 +257,20 @@ def build(dev='no'):
 
     with cd_function(env.host_site_path + '/' + env.public_path):
         run_function("drush si --yes %s --site-name='%s' --site-mail='%s' --account-name='%s' --account-pass='%s' --account-mail='%s'" %
-                (env.site_profile, env.site_name, 'example@ombuweb.com', 'system', 'pass', 'example@ombuweb.com'))
+                (env.site_profile, env.site_name, 'noreply@ombuweb.com', 'system', 'pass', 'noreply@ombuweb.com'))
         run_function("chmod 755 sites/default")
         run_function("chmod 644 sites/default/settings.php")
         if dev == 'yes':
             run_function("drush en -y %s" % env.dev_modules)
             run_function("drush cc all")
+
+@task
+def enforce_perms():
+    from fabric.api import sudo
+    print('+ Setting file permissions with sudo')
+    with cd(env.host_site_path):
+        sudo('chown -R %s:%s private logs && chmod 0700 private logs' %
+                (env.user, env.user))
+        sudo('if [ -d private/ssl ]; then chown root:admin private/ssl; fi')
+        sudo('chown -R %s:%s files && chmod -R 2770 files' % (env.user,
+            env.host_webserver_user))

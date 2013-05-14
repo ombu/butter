@@ -31,3 +31,19 @@ def mark(parsed_ref):
             date= strftime("%Y.%m.%d at %H:%M:%SUTC", gmtime())
             run('echo "%s by %s: %s" >> DEPLOYMENTS' % (date, os.getlogin(), parsed_ref))
             run('chmod u-w DEPLOYMENTS')
+
+@task
+def clean(age=15):
+    """
+    Clean a `path` from files older than `age` days
+    """
+    with hide('running', 'stdout'):
+        with cd('%s/changesets' % env.host_site_path):
+            # count how many we'll delete
+            count = run("""find . -maxdepth 1 -type d -mtime +%s ! -iname '\.'| wc -l""" %
+                    age)
+            # delete
+            if count != '0':
+                print('+ Removing %s deployments older than %s days' % (count, age))
+                run("""find . -maxdepth 1 -type d -mtime +%s ! -iname '\.' -print0 \
+                        | xargs -0 rm -rf""" % age)
