@@ -98,40 +98,68 @@ def setup_env():
 
 
 def settings_php(build_path):
-    print('+ Configuring site settings.php')
-    with cd('%s/public/sites/default' % build_path):
-        file = "settings.%s.php" % env.host_type
-        if files.exists(file):
-            files.sed(file, '%%DB_DB%%', env.db_db)
-            files.sed(file, '%%DB_USER%%', env.db_user)
-            files.sed(file, '%%DB_PW%%', env.db_pw)
-            files.sed(file, '%%DB_HOST%%', env.db_host)
-            if 'smtp_pw' in env:
-              files.sed(file, '%%SMTP_PW%%', env.smtp_pw)
-            if 'base_url' in env:
-                files.sed(file, '%%BASE_URL%%', env.base_url)
-            if files.exists('settings.php'):
-                run('rm settings.php')
-            run('cp settings.%s.php settings.php' % env.host_type )
-            run('rm settings.*.php settings.*.bak')
-        else:
-            run('ls -lah')
-            abort('Could not find %s' % file)
+    # Loop over all available sites. If sites parameter doesn't exist in env,
+    # then use default.
+    if not 'sites' in env:
+        env.sites = { 'default': env.db_db }
+
+    for (site, db) in env.sites.items():
+        print('+ Configuring %s settings.php' % site)
+        with cd('%s/public/sites/%s' % (build_path, site)):
+            file = "settings.%s.php" % env.host_type
+            if files.exists(file):
+                # Interpolate database settings.
+                files.sed(file, '%%DB_DB%%', db)
+                files.sed(file, '%%DB_USER%%', env.db_user)
+                files.sed(file, '%%DB_PW%%', env.db_pw)
+                files.sed(file, '%%DB_HOST%%', env.db_host)
+
+                # todo: remove in favor of generic settings interpolation below.
+                if 'smtp_pw' in env:
+                    files.sed(file, '%%SMTP_PW%%', env.smtp_pw)
+                if 'base_url' in env:
+                    files.sed(file, '%%BASE_URL%%', env.base_url)
+
+                if 'settings' in env:
+                    for (setting, value) in env.settings.items():
+                        files.sed(file, '%%' + setting + '%%', value)
+
+                if files.exists('settings.php'):
+                    run('rm settings.php')
+                run('cp settings.%s.php settings.php' % env.host_type )
+                run('rm settings.*.php settings.*.bak')
+            else:
+                run('ls -lah')
+                abort('Could not find %s' % file)
 
 def set_perms(build_path):
+    # todo: abstract this out to own function.
+    if not 'sites' in env:
+        env.sites = { 'default': env.db_db }
+
     print('+ Setting Drupal permissions')
     with cd(env.host_site_path):
-        run('chown %s:%s %s && chgrp -R %s %s' % (env.user,
-            env.host_webserver_user, build_path, env.host_webserver_user,
-            build_path))
+        run('chown %s:%s %s' % (env.user,
+            env.host_webserver_user, build_path))
         run('chmod -R 2750 %s' % build_path)
-        run('chmod 0440 %s/public/sites/default/settings*' % build_path)
+        for site in env.sites:
+            run('chmod 0440 %s/public/sites/%s/settings*' % (build_path, site))
 
 def link_files(build_path):
     print('+ Creating symlinks')
-    with cd('%s/public/sites/default' % build_path):
-        run('rm -rf files')
-        run('ln -s ../../../../../files files')
+
+    # If deployment is a multisite, each site files will live in
+    # /files/[site-name]. Otherwise, default will just be /files
+    if 'sites' in env:
+        for site in env.sites:
+            with cd('%s/public/sites/%s' % (build_path, site)):
+                run('rm -rf files')
+                run('ln -s ../../../../../files/%s files' % site)
+    else:
+        with cd('%s/public/sites/default' % build_path):
+            run('rm -rf files')
+            run('ln -s ../../../../../filess files')
+
     with cd(env.host_site_path):
         run('if [ -h current ] ; then unlink current ; fi')
         run('ln -s %s/public current' % build_path)
@@ -160,9 +188,25 @@ def sync(src, dst):
     execute(src)
     src_env = copy(env)
 
+    # Allow user to select multisite to sync.
+    if 'sites' in env:
+        prompt_str = "Select site to sync:\n"
+        i = 0;
+        sites = []
+        for site in env.sites:
+            sites.append(site)
+            prompt_str += "\t(%d) %s\n" % (i, site)
+            i += 1
+        site = int(prompt(prompt_str + "\n>"));
+        site = sites[site]
+        env.db_db = env.sites[site]
+        dst_env.db_db = dst_env.sites[site]
+    else:
+        site = 'default'
+
     # helper vars
     sqldump = '/tmp/src_%s.sql.gz' % env.db_db
-    src_files = '%s/current/sites/default/files/' % src_env.host_site_path
+    src_files = '%s/current/sites/%s/files/' % (src_env.host_site_path, site)
 
     # grab a db dump
     with settings(host_string=src_env.hosts[0]):
@@ -172,6 +216,10 @@ def sync(src, dst):
 
     # parse src
     src_host = urlparse('ssh://' + src_env.hosts[0])
+    if not 'port' in src_host:
+        port = 22
+    else:
+        port = src_host.port
 
     drop_tables_sql = """mysql -u%(db_user)s -p%(db_pw)s -BNe "show tables" %(db_db)s \
         | tr '\n' ',' | sed -e 's/,$//' \
@@ -185,11 +233,11 @@ def sync(src, dst):
         local("gunzip -c %s | mysql -u%s -p%s -D%s" % (sqldump, dst_env.db_user,
             dst_env.db_pw, dst_env.db_db))
         local("rm %s" % sqldump)
-        dst_files = dst_env.public_path + '/sites/default/files/'
+        dst_files = '%s/sites/%s/files/' % (dst_env.public_path, site)
         local("""rsync --human-readable --archive --backup --progress \
                 --rsh='ssh -p %s' --compress %s@%s:%s %s     \
                 --exclude=css --exclude=js --exclude=styles
-                """ % (src_host.port, src_env.user, src_host.hostname, src_files,
+                """ % (port, src_env.user, src_host.hostname, src_files,
                     dst_files))
 
     # Source and destination environments are in the same host
@@ -200,8 +248,8 @@ def sync(src, dst):
             run("gunzip -c %s | mysql -u%s -p%s -D%s" % (sqldump, dst_env.db_user,
                 dst_env.db_pw, dst_env.db_db))
             run("rm %s" % sqldump)
-            dst_files = '%s/%s/sites/default/files/' % (dst_env.host_site_path,
-                    dst_env.public_path)
+            dst_files = '%s/%s/sites/%s/files/' % (dst_env.host_site_path,
+                    dst_env.public_path, site)
             run("""rsync --human-readable --archive --backup --progress \
                     --compress %s %s \
                     --exclude=css --exclude=js --exclude=styles
@@ -212,16 +260,16 @@ def sync(src, dst):
         with settings(host_string=dst_env.hosts[0]):
             put(sqldump, sqldump)
             run(drop_tables_sql % {"db_user": dst_env.db_user, "db_pw": dst_env.db_pw,
-                "db_db": dst_env.db_db})
+                "db_db": dst_env.sites[site]})
             run("gunzip -c %s | mysql -u%s -p%s -D%s" % (sqldump, dst_env.db_user,
-                dst_env.db_pw, dst_env.db_db))
+                dst_env.db_pw, dst_env.sites[site]))
             run("rm %s" % sqldump)
-            dst_files = '%s/%s/sites/default/files/' % (dst_env.host_site_path,
-                    dst_env.public_path)
+            dst_files = '%s/%s/sites/%s/files/' % (dst_env.host_site_path,
+                    dst_env.public_path, site)
             run("""rsync --human-readable --archive --backup --progress \
                     --rsh='ssh -p %s' --compress %s@%s:%s %s     \
                     --exclude=css --exclude=js --exclude=styles
-                    """ % (src_host.port, src_env.user, src_host.hostname, src_files,
+                    """ % (port, src_env.user, src_host.hostname, src_files,
                         dst_files))
 
 @task
