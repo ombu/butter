@@ -187,7 +187,12 @@ def sync(src, dst):
         local("gunzip -c %s | mysql -u%s -p%s -D%s" % (sqldump, dst_env.db_user,
             dst_env.db_pw, dst_env.db_db))
         local("rm %s" % sqldump)
-        dst_files = dst_env.public_path + '/sites/default/files/'
+
+        # Ensure drupal.sync works anywhere in project structure by getting the
+        # directory that the fabfile is in (project root).
+        import os
+        dst_files = os.path.dirname(env.real_fabfile) + dst_env.public_path + '/sites/default/files/'
+
         local("""rsync --human-readable --archive --backup --progress \
                 --rsh='ssh -p %s' --compress %s@%s:%s %s     \
                 --exclude=css --exclude=js --exclude=styles
@@ -250,7 +255,10 @@ def build(dev='yes'):
         from fabric.api import lcd
         run_function = local
         cd_function = lcd
-        env.host_site_path = '.'
+
+        # Ensure drupal.build can be run in any directory locally.
+        import os
+        env.host_site_path = os.path.dirname(env.real_fabfile)
     else:
         run_function = run
         cd_function = cd
