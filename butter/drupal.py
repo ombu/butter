@@ -76,8 +76,8 @@ def setup_env():
 
     AuthType Basic
     AuthName "Protected"
-    AuthUserFile /var/www/htpwd
-    Require user dev1
+    AuthUserFile /etc/htpasswords
+    Require user ombudev
     Order deny,allow
     Deny from all
     Allow from 75.145.65.101
