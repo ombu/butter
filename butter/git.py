@@ -1,5 +1,5 @@
 from __future__ import with_statement
-from fabric.api import env, cd, abort
+from fabric.api import env, cd, abort, hide
 from fabric.operations import run
 
 
@@ -17,8 +17,9 @@ def check_commit(ref):
 def checkout(parsed_ref):
     print('+ Preparing %s for deployment' % parsed_ref)
     with cd(env.host_site_path + '/private/repo'):
-        run("""git reset --hard %s && git submodule update --init \
-                --recursive""" % parsed_ref)
+        with hide('running', 'stdout'):
+            run("""git reset --hard %s && git submodule update --init \
+                    --recursive""" % parsed_ref)
     with cd(env.host_site_path):
         run("""mkdir changesets/%s && tar cf - private/repo \
                 | (cd changesets/%s; tar xpf -  --strip-components=2)"""
