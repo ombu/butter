@@ -32,7 +32,6 @@ def setup_env():
     """
     Set up the directory structure at env.host_site_path
     """
-    from fabric.api import sudo
 
     print('+ Creating directory structure')
     if files.exists(env.host_site_path):
@@ -50,50 +49,6 @@ def setup_env():
             run('touch logs/access.log logs/error.log')
             print('+ Cloning repository: %s' % env.repo_url)
             run('%s clone %s private/repo' % (env.repo_type, env.repo_url))
-            if not 'url' in env:
-                env.url = prompt('Please enter the site url (ex: qa4.dev.ombuweb.com): ')
-            virtual_host = 'private/%s.conf' % env.url
-            if files.exists(virtual_host):
-                run('rm %s' % virtual_host)
-            virtual_host_contents = """<VirtualHost *:80>
-
-  # Admin email, Server Name (domain name) and any aliases
-  ServerAdmin martin@ombuweb.com
-  ServerName %%url%%
-
-  # Index file and Document Root (where the public files are located)
-  DirectoryIndex index.php
-  DocumentRoot %%host_site_path%%/current
-
-  # Custom log file locations
-  ErrorLog  %%host_site_path%%/logs/error.log
-  CustomLog %%host_site_path%%/logs/access.log combined
-
-  <Directory />
-
-    SetEnv APPLICATION_ENV %%host_type%%
-    AllowOverride All
-
-    AuthType Basic
-    AuthName "Protected"
-    AuthUserFile /etc/htpasswords
-    Require user ombudev
-    Order deny,allow
-    Deny from all
-    Allow from 75.145.65.101
-    Satisfy any
-
-  </Directory>
-
-</VirtualHost>"""
-            files.append(virtual_host, virtual_host_contents);
-            files.sed(virtual_host, '%%host_site_path%%', env.host_site_path)
-            files.sed(virtual_host, '%%host_type%%', env.host_type)
-            files.sed(virtual_host, '%%url%%', env.url)
-            run('rm %s.bak' % virtual_host)
-            sudo('if [ ! -L /etc/apache2/sites-available/%s.conf ]; then  ln -s %s /etc/apache2/sites-available/%s.conf; fi' % (env.url, env.host_site_path + '/' + virtual_host, env.url))
-            sudo('if [ ! -L /etc/apache2/sites-enabled/%(url)s.conf ]; then ln -s /etc/apache2/sites-available/%(url)s.conf /etc/apache2/sites-enabled/%(url)s.conf; fi' % env)
-            sudo('service apache2 force-reload')
     print('+ Site directory structure created at: %s' % env.host_site_path)
 
 
