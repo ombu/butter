@@ -27,10 +27,8 @@ def mark(parsed_ref):
             if not files.exists('DEPLOYMENTS'):
                 print('+ No DEPLOYMENTS file found. Creating one.')
                 run('touch DEPLOYMENTS');
-            run('chmod u+w DEPLOYMENTS')
             date= strftime("%Y.%m.%d at %H:%M:%SUTC", gmtime())
             run('echo "%s by %s: %s" >> DEPLOYMENTS' % (date, os.getlogin(), parsed_ref))
-            run('chmod u-w DEPLOYMENTS')
 
 @task
 def clean(age=15):

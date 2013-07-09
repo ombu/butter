@@ -32,7 +32,6 @@ def setup_env():
     """
     Set up the directory structure at env.host_site_path
     """
-    from fabric.api import sudo
 
     print('+ Creating directory structure')
     if files.exists(env.host_site_path):
@@ -46,54 +45,9 @@ def setup_env():
         run('mkdir -p %s' % env.host_site_path)
     with cd(env.host_site_path):
         with hide('running', 'stdout'):
-            run('mkdir changesets files logs private')
-            run('touch logs/access.log logs/error.log')
+            run('mkdir changesets files private')
             print('+ Cloning repository: %s' % env.repo_url)
             run('%s clone %s private/repo' % (env.repo_type, env.repo_url))
-            if not 'url' in env:
-                env.url = prompt('Please enter the site url (ex: qa4.dev.ombuweb.com): ')
-            virtual_host = 'private/%s' % env.url
-            if files.exists(virtual_host):
-                run('rm %s' % virtual_host)
-            virtual_host_contents = """<VirtualHost *:80>
-
-  # Admin email, Server Name (domain name) and any aliases
-  ServerAdmin martin@ombuweb.com
-  ServerName %%url%%
-
-  # Index file and Document Root (where the public files are located)
-  DirectoryIndex index.php
-  DocumentRoot %%host_site_path%%/current
-
-  # Custom log file locations
-  ErrorLog  %%host_site_path%%/logs/error.log
-  CustomLog %%host_site_path%%/logs/access.log combined
-
-  <Directory />
-
-    SetEnv APPLICATION_ENV %%host_type%%
-    AllowOverride All
-
-    AuthType Basic
-    AuthName "Protected"
-    AuthUserFile /vol/main/htpwd
-    Require user dev1
-    Order deny,allow
-    Deny from all
-    Allow from 75.145.65.101
-    Satisfy any
-
-  </Directory>
-
-</VirtualHost>"""
-            files.append(virtual_host, virtual_host_contents);
-            files.sed(virtual_host, '%%host_site_path%%', env.host_site_path)
-            files.sed(virtual_host, '%%host_type%%', env.host_type)
-            files.sed(virtual_host, '%%url%%', env.url)
-            run('rm %s.bak' % virtual_host)
-            sudo('if [ ! -L /etc/apache2/sites-available/%s ]; then  ln -s %s /etc/apache2/sites-available/%s; fi' % (env.url, env.host_site_path + '/' + virtual_host, env.url))
-            sudo('if [ ! -L /etc/apache2/sites-enabled/%(url)s]; then ln -s ../sites-available/%(url)s /etc/apache2/sites-enabled/%(url)s; fi' % env)
-            sudo('service apache2 force-reload')
     print('+ Site directory structure created at: %s' % env.host_site_path)
 
 
@@ -124,7 +78,7 @@ def set_perms(build_path):
         run('chown %s:%s %s && chgrp -R %s %s' % (env.user,
             env.host_webserver_user, build_path, env.host_webserver_user,
             build_path))
-        run('chmod -R 2750 %s' % build_path)
+        run('chmod -R 2770 %s' % build_path)
         run('chmod 0440 %s/public/sites/default/settings*' % build_path)
 
 def link_files(build_path):
@@ -266,7 +220,7 @@ def build(dev='yes'):
     with cd_function(env.host_site_path + '/' + env.public_path):
         run_function("drush si --yes %s --site-name='%s' --site-mail='%s' --account-name='%s' --account-pass='%s' --account-mail='%s'" %
                 (env.site_profile, env.site_name, 'noreply@ombuweb.com', 'system', 'pass', 'noreply@ombuweb.com'))
-        run_function("chmod 755 sites/default")
+        run_function("chmod 775 sites/default")
         run_function("chmod 644 sites/default/settings.php")
         if dev == 'yes':
             run_function("drush en -y %s" % env.dev_modules)
@@ -277,8 +231,5 @@ def enforce_perms():
     from fabric.api import sudo
     print('+ Setting file permissions with sudo')
     with cd(env.host_site_path):
-        sudo('chown -R %s:%s private logs && chmod 0700 private logs' %
-                (env.user, env.user))
-        sudo('if [ -d private/ssl ]; then chown root:admin private/ssl; fi')
         sudo('chown -R %s:%s files && chmod -R 2770 files' % (env.user,
             env.host_webserver_user))
