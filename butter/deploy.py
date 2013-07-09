@@ -30,7 +30,7 @@ def mark(parsed_ref):
             run('chmod u+w DEPLOYMENTS')
             date= strftime("%Y.%m.%d at %H:%M:%SUTC", gmtime())
             run('echo "%s by %s: %s" >> DEPLOYMENTS' % (date, os.getlogin(), parsed_ref))
-            run('chmod u-w DEPLOYMENTS')
+            run('chmod 0440 DEPLOYMENTS')
 
 @task
 def clean(age=15):

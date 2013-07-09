@@ -45,8 +45,7 @@ def setup_env():
         run('mkdir -p %s' % env.host_site_path)
     with cd(env.host_site_path):
         with hide('running', 'stdout'):
-            run('mkdir changesets files logs private')
-            run('touch logs/access.log logs/error.log')
+            run('mkdir changesets files private')
             print('+ Cloning repository: %s' % env.repo_url)
             run('%s clone %s private/repo' % (env.repo_type, env.repo_url))
     print('+ Site directory structure created at: %s' % env.host_site_path)
@@ -79,7 +78,7 @@ def set_perms(build_path):
         run('chown %s:%s %s && chgrp -R %s %s' % (env.user,
             env.host_webserver_user, build_path, env.host_webserver_user,
             build_path))
-        run('chmod -R 2750 %s' % build_path)
+        run('chmod -R 2770 %s' % build_path)
         run('chmod 0440 %s/public/sites/default/settings*' % build_path)
 
 def link_files(build_path):
@@ -221,7 +220,7 @@ def build(dev='yes'):
     with cd_function(env.host_site_path + '/' + env.public_path):
         run_function("drush si --yes %s --site-name='%s' --site-mail='%s' --account-name='%s' --account-pass='%s' --account-mail='%s'" %
                 (env.site_profile, env.site_name, 'noreply@ombuweb.com', 'system', 'pass', 'noreply@ombuweb.com'))
-        run_function("chmod 755 sites/default")
+        run_function("chmod 775 sites/default")
         run_function("chmod 644 sites/default/settings.php")
         if dev == 'yes':
             run_function("drush en -y %s" % env.dev_modules)
@@ -232,8 +231,5 @@ def enforce_perms():
     from fabric.api import sudo
     print('+ Setting file permissions with sudo')
     with cd(env.host_site_path):
-        sudo('chown -R %s:%s private logs && chmod 0700 private logs' %
-                (env.user, env.user))
-        sudo('if [ -d private/ssl ]; then chown root:admin private/ssl; fi')
         sudo('chown -R %s:%s files && chmod -R 2770 files' % (env.user,
             env.host_webserver_user))
