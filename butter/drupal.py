@@ -48,6 +48,7 @@ def setup_env():
             run('mkdir changesets files private')
             print('+ Cloning repository: %s' % env.repo_url)
             run('%s clone %s private/repo' % (env.repo_type, env.repo_url))
+            run('chmod g+w private/repo')
     print('+ Site directory structure created at: %s' % env.host_site_path)
 
 
