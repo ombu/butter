@@ -99,6 +99,7 @@ def sync(src, dst):
     Moves drupal sites between servers
     """
     import getpass
+    import time
     from fabric.api import hide
     from fabric.operations import get, put, local
     from fabric.utils import abort
@@ -118,26 +119,32 @@ def sync(src, dst):
     src_env = copy(env)
 
     # helper vars
-    sqldump = '/tmp/src_%s.sql.gz' % env.db_db
+    sqldump = '/tmp/src_%s_%d.sql.gz' % (env.db_db, time.time())
     src_files = '%s/current/sites/default/files/' % src_env.host_site_path
 
     # grab a db dump
     with settings(host_string=src_env.hosts[0]):
-        run('mysqldump -u%s -p%s %s | gzip > %s' %
-                (src_env.db_user, src_env.db_pw, env.db_db, sqldump))
+        run('mysqldump -h %s -u%s -p%s %s | gzip > %s' %
+                (src_env.db_host, src_env.db_user, src_env.db_pw, env.db_db, sqldump))
         get(sqldump, sqldump)
 
     # parse src
     src_host = urlparse('ssh://' + src_env.hosts[0])
 
-    drop_tables_sql = """mysql -u%(db_user)s -p%(db_pw)s -BNe "show tables" %(db_db)s \
+    # Default to port 22 if port is not present in parsed url
+    if (src_host.port):
+        src_port = src_host.port
+    else:
+        src_port = 22
+
+    drop_tables_sql = """mysql -h %(db_host)s -u%(db_user)s -p%(db_pw)s -BNe "show tables" %(db_db)s \
         | tr '\n' ',' | sed -e 's/,$//' \
         | awk '{print "SET FOREIGN_KEY_CHECKS = 0;DROP TABLE IF EXISTS " $1 ";SET FOREIGN_KEY_CHECKS = 1;"}' \
-        | mysql -u%(db_user)s -p%(db_pw)s %(db_db)s"""
+        | mysql -h %(db_host)s -u%(db_user)s -p%(db_pw)s %(db_db)s"""
 
     # Pulling remote to local
     if dst == 'local':
-        local(drop_tables_sql % {"db_user": dst_env.db_user, "db_pw": dst_env.db_pw,
+        local(drop_tables_sql % {"db_host": dst_env.db_host, "db_user": dst_env.db_user, "db_pw": dst_env.db_pw,
             "db_db": dst_env.db_db})
         local("gunzip -c %s | mysql -u%s -p%s -D%s" % (sqldump, dst_env.db_user,
             dst_env.db_pw, dst_env.db_db))
@@ -146,20 +153,20 @@ def sync(src, dst):
         # Ensure drupal.sync works anywhere in project structure by getting the
         # directory that the fabfile is in (project root).
         import os
-        dst_files = os.path.dirname(env.real_fabfile) + dst_env.public_path + '/sites/default/files/'
+        dst_files = os.path.dirname(env.real_fabfile) + '/' + dst_env.public_path + '/sites/default/files/'
 
         local("""rsync --human-readable --archive --backup --progress \
                 --rsh='ssh -p %s' --compress %s@%s:%s %s     \
                 --exclude=css --exclude=js --exclude=styles
-                """ % (src_host.port, src_env.user, src_host.hostname, src_files,
+                """ % (src_port, src_env.user, src_host.hostname, src_files,
                     dst_files))
 
     # Source and destination environments are in the same host
     elif src_env.hosts[0] == dst_env.hosts[0]:
         with settings(host_string=dst_env.hosts[0]):
-            run(drop_tables_sql % {"db_user": dst_env.db_user, "db_pw": dst_env.db_pw,
+            run(drop_tables_sql % {"db_host": dst_env.db_host, "db_user": dst_env.db_user, "db_pw": dst_env.db_pw,
                 "db_db": dst_env.db_db})
-            run("gunzip -c %s | mysql -u%s -p%s -D%s" % (sqldump, dst_env.db_user,
+            run("gunzip -c %s | mysql -h %s -u%s -p%s -D%s" % (sqldump, dst_env.db_host, dst_env.db_user,
                 dst_env.db_pw, dst_env.db_db))
             run("rm %s" % sqldump)
             dst_files = '%s/%s/sites/default/files/' % (dst_env.host_site_path,
@@ -173,9 +180,9 @@ def sync(src, dst):
     else:
         with settings(host_string=dst_env.hosts[0]):
             put(sqldump, sqldump)
-            run(drop_tables_sql % {"db_user": dst_env.db_user, "db_pw": dst_env.db_pw,
+            run(drop_tables_sql % {"db_host": dst_env.db_host, "db_user": dst_env.db_user, "db_pw": dst_env.db_pw,
                 "db_db": dst_env.db_db})
-            run("gunzip -c %s | mysql -u%s -p%s -D%s" % (sqldump, dst_env.db_user,
+            run("gunzip -c %s | mysql -h %s -u%s -p%s -D%s" % (sqldump, dst_env.db_host, dst_env.db_user,
                 dst_env.db_pw, dst_env.db_db))
             run("rm %s" % sqldump)
             dst_files = '%s/%s/sites/default/files/' % (dst_env.host_site_path,
@@ -183,7 +190,7 @@ def sync(src, dst):
             run("""rsync --human-readable --archive --backup --progress \
                     --rsh='ssh -p %s' --compress %s@%s:%s %s     \
                     --exclude=css --exclude=js --exclude=styles
-                    """ % (src_host.port, src_env.user, src_host.hostname, src_files,
+                    """ % (src_port, src_env.user, src_host.hostname, src_files,
                         dst_files))
 
 @task
@@ -224,7 +231,7 @@ def build(dev='yes'):
         run_function("chmod 775 sites/default")
         run_function("chmod 644 sites/default/settings.php")
         if dev == 'yes':
-            run_function("drush en -y %s" % env.dev_modules)
+            run_function("drush en -y --skip %s" % env.dev_modules)
             run_function("drush cc all")
 
 @task
