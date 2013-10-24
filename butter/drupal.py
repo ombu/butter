@@ -120,7 +120,6 @@ def sync(src, dst):
 
     # helper vars
     sqldump = '/tmp/src_%s_%d.sql.gz' % (env.db_db, time.time())
-    src_files = '%s/current/sites/default/files/' % src_env.host_site_path
 
     # grab a db dump
     with settings(host_string=src_env.hosts[0]):
@@ -155,11 +154,7 @@ def sync(src, dst):
         import os
         dst_files = os.path.dirname(env.real_fabfile) + '/' + dst_env.public_path + '/sites/default/files/'
 
-        local("""rsync --human-readable --archive --backup --progress \
-                --rsh='ssh -p %s' --compress %s@%s:%s %s     \
-                --exclude=css --exclude=js --exclude=styles
-                """ % (src_port, src_env.user, src_host.hostname, src_files,
-                    dst_files))
+        local('aws s3 sync %s %s' % (env.s3_bucket, dst_files));
 
     # Source and destination environments are in the same host
     elif src_env.hosts[0] == dst_env.hosts[0]:
@@ -171,10 +166,8 @@ def sync(src, dst):
             run("rm %s" % sqldump)
             dst_files = '%s/%s/sites/default/files/' % (dst_env.host_site_path,
                     dst_env.public_path)
-            run("""rsync --human-readable --archive --backup --progress \
-                    --compress %s %s \
-                    --exclude=css --exclude=js --exclude=styles
-                    """ % (src_files, dst_files))
+
+            run('aws s3 sync %s %s' % (env.s3_bucket, dst_files));
 
     # Pulling remote to remote & remote servers are not the same host
     else:
@@ -187,11 +180,8 @@ def sync(src, dst):
             run("rm %s" % sqldump)
             dst_files = '%s/%s/sites/default/files/' % (dst_env.host_site_path,
                     dst_env.public_path)
-            run("""rsync --human-readable --archive --backup --progress \
-                    --rsh='ssh -p %s' --compress %s@%s:%s %s     \
-                    --exclude=css --exclude=js --exclude=styles
-                    """ % (src_port, src_env.user, src_host.hostname, src_files,
-                        dst_files))
+
+            run('aws s3 sync %s %s' % (env.s3_bucket, dst_files));
 
 @task
 def rebuild():

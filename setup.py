@@ -16,5 +16,6 @@ setup(
     long_description=open('README.rst').read(),
     install_requires=[
         "Fabric >= l.3.4",
+        "awscli >= 1.1.0"
     ],
 )
