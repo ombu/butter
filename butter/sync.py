@@ -29,7 +29,7 @@ def files(dst='local'):
 @task
 def db(src, dst):
     """
-    Copies a database from src to dst.
+    Copies a database from `src` to `dst` environment.
     """
     if src == 'local':
         abort('Cannot sync from local.')
