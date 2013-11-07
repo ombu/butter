@@ -4,7 +4,7 @@ from fabric.operations import run, prompt
 from fabric.contrib import files
 from fabric.contrib import console
 from urlparse import urlparse
-from butter import deploy
+from butter import deploy, sync as butter_sync
 from butter.host import pre_clean
 
 @task
@@ -149,13 +149,6 @@ def sync(src, dst):
             dst_env.db_pw, dst_env.db_db))
         local("rm %s" % sqldump)
 
-        # Ensure drupal.sync works anywhere in project structure by getting the
-        # directory that the fabfile is in (project root).
-        import os
-        dst_files = os.path.dirname(env.real_fabfile) + '/' + dst_env.public_path + '/sites/default/files/'
-
-        local('aws s3 sync %s %s' % (env.s3_bucket, dst_files));
-
     # Source and destination environments are in the same host
     elif src_env.hosts[0] == dst_env.hosts[0]:
         with settings(host_string=dst_env.hosts[0]):
@@ -164,10 +157,6 @@ def sync(src, dst):
             run("gunzip -c %s | mysql -h %s -u%s -p%s -D%s" % (sqldump, dst_env.db_host, dst_env.db_user,
                 dst_env.db_pw, dst_env.db_db))
             run("rm %s" % sqldump)
-            dst_files = '%s/%s/sites/default/files/' % (dst_env.host_site_path,
-                    dst_env.public_path)
-
-            run('aws s3 sync %s %s' % (env.s3_bucket, dst_files));
 
     # Pulling remote to remote & remote servers are not the same host
     else:
@@ -178,10 +167,10 @@ def sync(src, dst):
             run("gunzip -c %s | mysql -h %s -u%s -p%s -D%s" % (sqldump, dst_env.db_host, dst_env.db_user,
                 dst_env.db_pw, dst_env.db_db))
             run("rm %s" % sqldump)
-            dst_files = '%s/%s/sites/default/files/' % (dst_env.host_site_path,
-                    dst_env.public_path)
 
-            run('aws s3 sync %s %s' % (env.s3_bucket, dst_files));
+    print('+ Database copied from %s to %s' % (src, dst))
+
+    butter_sync.files(dst)
 
 @task
 def rebuild():
