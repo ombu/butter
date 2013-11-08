@@ -93,12 +93,14 @@ def link_files(build_path):
         run('ln -s %s/public current' % build_path)
 
 @task
-def sync_files(dst):
+def sync_files(dst, opts_string=''):
     """
     Syncs Drupal files from the environment's S3 bucket to `dst`.
     """
     ensure_files_path()
-    butter_sync.files(dst)
+    exclude = ['*styles/*', '*xmlsitemap/*', '*js/*', '*css/*', '*ctools/*']
+    opts_string += ' ' + ' '.join(["--exclude '%s'" % v for v in exclude])
+    butter_sync.files(dst, opts_string)
 
 @task
 def sync_db(src, dst):
