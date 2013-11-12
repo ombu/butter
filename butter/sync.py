@@ -1,7 +1,7 @@
 from fabric.api import task, env, execute, settings
 from fabric.operations import run, local, prompt
 from fabric.utils import abort
-from copy import copy
+from copy import copy, deepcopy
 
 @task
 def files(dst='local', opts_string=''):
@@ -47,16 +47,18 @@ def db(src, dst):
         abort('Sync aborted')
 
     # record the environments
-    execute(dst)
-    dst_env = copy(env)
-    execute(src)
-    src_env = copy(env)
+    dst_env = _get_env(dst)
+    src_env = _get_env(src)
+
+    dst_env.db_host = _mysql_db_host(dst)
+    src_env.db_host = _mysql_db_host(src)
 
     # Drop the previous tables in dst in case it has tables not in src.
     drop_tables_sql = """mysql -h %(db_host)s -u%(db_user)s -p%(db_pw)s -BNe "show tables" %(db_db)s \
         | tr '\n' ',' | sed -e 's/,$//' \
         | awk '{print "SET FOREIGN_KEY_CHECKS = 0;DROP TABLE IF EXISTS " $1 ";SET FOREIGN_KEY_CHECKS = 1;"}' \
         | mysql -h %(db_host)s -u%(db_user)s -p%(db_pw)s %(db_db)s"""
+
     local(drop_tables_sql % {"db_host": dst_env.db_host,
         "db_user": dst_env.db_user, "db_pw": dst_env.db_pw,
         "db_db": dst_env.db_db})
@@ -67,3 +69,34 @@ def db(src, dst):
             dst_env.db_user, dst_env.db_pw, dst_env.db_db)
     local('%s | %s' % (dump_sql, import_sql))
     print('+ Database synced from %s to %s' % (src, dst))
+
+def _mysql_db_host(env_name):
+    """
+    Figures out the correct host to use for database moving calls.
+    """
+    local_env = _get_env(env_name)
+    db_host = getattr(local_env, 'db_host', 'localhost')
+    hosts = getattr(local_env, 'hosts', [])
+    if db_host == 'localhost' and len(hosts):
+        db_host = hosts[0]
+    return db_host
+
+def _get_env(env_name):
+    """
+    Returns an env object for env_name without overwriting the global env.
+    """
+    global env
+    previous = deepcopy(env)
+    execute(env_name)
+    local_env = deepcopy(env)
+
+    # Delete any attributes that were added.
+    for key, value in local_env.iteritems():
+        if not key in previous:
+            del env[key]
+
+    # Put the original values back on env.
+    for key, value in previous.iteritems():
+        env[key] = value
+
+    return local_env
