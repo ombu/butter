@@ -10,6 +10,8 @@ def files(dst='local', opts_string=''):
     """
     if dst == 'production':
         abort('Cannot sync to production.')
+    if not 's3_bucket' in env:
+        abort('Please configure an env.s3_bucket for this project.')
 
     execute(dst)
     dst_env = copy(env)
