@@ -4,7 +4,7 @@ from fabric.operations import run, prompt
 from fabric.contrib import files
 from fabric.contrib import console
 from urlparse import urlparse
-from butter import deploy
+from butter import deploy, sync as butter_sync
 from butter.host import pre_clean
 
 @task
@@ -84,8 +84,7 @@ def set_perms(build_path):
 
 def link_files(build_path):
     print('+ Creating symlinks')
-    if not 'files_path' in env:
-        env.files_path = 'public/sites/default/files'
+    ensure_files_path()
     with cd(build_path):
         run('rm -rf %s' % env.files_path)
         run('ln -s %s/files %s' % (env.host_site_path, env.files_path))
@@ -94,94 +93,30 @@ def link_files(build_path):
         run('ln -s %s/public current' % build_path)
 
 @task
+def sync_files(dst, opts_string=''):
+    """
+    Syncs Drupal files from the environment's S3 bucket to `dst`.
+    """
+    ensure_files_path()
+    exclude = ['*styles/*', '*xmlsitemap/*', '*js/*', '*css/*', '*ctools/*']
+    opts_string += ' ' + ' '.join(["--exclude '%s'" % v for v in exclude])
+    butter_sync.files(dst, opts_string)
+
+@task
+def sync_db(src, dst):
+    """
+    Copies a Drupal database from `src` to `dst` environment.
+    """
+    butter_sync.db(src, dst)
+
+@task
 def sync(src, dst):
     """
     Moves drupal sites between servers
     """
-    import getpass
-    import time
-    from fabric.api import hide
-    from fabric.operations import get, put, local
-    from fabric.utils import abort
-    from fabric.colors import blue
-    from copy import copy
-
-    # Really make sure user wants to push to production.
-    if dst == 'production':
-      force_push = prompt('Are you sure you want to push to production (WARNING: this will destroy production db):', None, 'n', 'y|n')
-      if force_push == 'n':
-        abort('Sync aborted')
-
-    # record the environments
-    execute(dst)
-    dst_env = copy(env)
-    execute(src)
-    src_env = copy(env)
-
-    # helper vars
-    sqldump = '/tmp/src_%s_%d.sql.gz' % (env.db_db, time.time())
-
-    # grab a db dump
-    with settings(host_string=src_env.hosts[0]):
-        run('mysqldump -h %s -u%s -p%s %s | gzip > %s' %
-                (src_env.db_host, src_env.db_user, src_env.db_pw, env.db_db, sqldump))
-        get(sqldump, sqldump)
-
-    # parse src
-    src_host = urlparse('ssh://' + src_env.hosts[0])
-
-    # Default to port 22 if port is not present in parsed url
-    if (src_host.port):
-        src_port = src_host.port
-    else:
-        src_port = 22
-
-    drop_tables_sql = """mysql -h %(db_host)s -u%(db_user)s -p%(db_pw)s -BNe "show tables" %(db_db)s \
-        | tr '\n' ',' | sed -e 's/,$//' \
-        | awk '{print "SET FOREIGN_KEY_CHECKS = 0;DROP TABLE IF EXISTS " $1 ";SET FOREIGN_KEY_CHECKS = 1;"}' \
-        | mysql -h %(db_host)s -u%(db_user)s -p%(db_pw)s %(db_db)s"""
-
-    # Pulling remote to local
-    if dst == 'local':
-        local(drop_tables_sql % {"db_host": dst_env.db_host, "db_user": dst_env.db_user, "db_pw": dst_env.db_pw,
-            "db_db": dst_env.db_db})
-        local("gunzip -c %s | mysql -u%s -p%s -D%s" % (sqldump, dst_env.db_user,
-            dst_env.db_pw, dst_env.db_db))
-        local("rm %s" % sqldump)
-
-        # Ensure drupal.sync works anywhere in project structure by getting the
-        # directory that the fabfile is in (project root).
-        import os
-        dst_files = os.path.dirname(env.real_fabfile) + '/' + dst_env.public_path + '/sites/default/files/'
-
-        local('aws s3 sync %s %s' % (env.s3_bucket, dst_files));
-
-    # Source and destination environments are in the same host
-    elif src_env.hosts[0] == dst_env.hosts[0]:
-        with settings(host_string=dst_env.hosts[0]):
-            run(drop_tables_sql % {"db_host": dst_env.db_host, "db_user": dst_env.db_user, "db_pw": dst_env.db_pw,
-                "db_db": dst_env.db_db})
-            run("gunzip -c %s | mysql -h %s -u%s -p%s -D%s" % (sqldump, dst_env.db_host, dst_env.db_user,
-                dst_env.db_pw, dst_env.db_db))
-            run("rm %s" % sqldump)
-            dst_files = '%s/%s/sites/default/files/' % (dst_env.host_site_path,
-                    dst_env.public_path)
-
-            run('aws s3 sync %s %s' % (env.s3_bucket, dst_files));
-
-    # Pulling remote to remote & remote servers are not the same host
-    else:
-        with settings(host_string=dst_env.hosts[0]):
-            put(sqldump, sqldump)
-            run(drop_tables_sql % {"db_host": dst_env.db_host, "db_user": dst_env.db_user, "db_pw": dst_env.db_pw,
-                "db_db": dst_env.db_db})
-            run("gunzip -c %s | mysql -h %s -u%s -p%s -D%s" % (sqldump, dst_env.db_host, dst_env.db_user,
-                dst_env.db_pw, dst_env.db_db))
-            run("rm %s" % sqldump)
-            dst_files = '%s/%s/sites/default/files/' % (dst_env.host_site_path,
-                    dst_env.public_path)
-
-            run('aws s3 sync %s %s' % (env.s3_bucket, dst_files));
+    sync_db(src, dst);
+    sync_files(dst);
+    print('+ Site synced from %s to %s' % (src, dst))
 
 @task
 def rebuild():
@@ -231,3 +166,7 @@ def enforce_perms():
     with cd(env.host_site_path):
         sudo('chown -R %s:%s files && chmod -R 2770 files' % (env.user,
             env.host_webserver_user))
+
+def ensure_files_path():
+    if not 'files_path' in env:
+        env.files_path = 'public/sites/default/files'
