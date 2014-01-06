@@ -153,11 +153,13 @@ def build(dev='yes'):
     with cd_function(env.host_site_path + '/' + env.public_path):
         run_function("drush si --yes %s --site-name='%s' --site-mail='%s' --account-name='%s' --account-pass='%s' --account-mail='%s'" %
                 (env.site_profile, env.site_name, 'noreply@ombuweb.com', 'system', 'pass', 'noreply@ombuweb.com'))
-        run_function("chmod 775 sites/default")
-        run_function("chmod 644 sites/default/settings.php")
         if dev == 'yes':
             run_function("drush en -y --skip %s" % env.dev_modules)
             run_function("drush cc all")
+
+        # Rebuild solr, since apachesolr.module will reindex all newly created
+        # nodes, possibly creating duplicate content in the solr index.
+        run_function("drush pml --status=enabled | grep apachesolr && drush solr-delete-index && drush solr-mark-all && drush solr-index")
 
 @task
 def enforce_perms():
