@@ -8,3 +8,4 @@ butter/fabfile.py
 butter/git.py
 butter/hg.py
 butter/host.py
+butter/sync.py

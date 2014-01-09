@@ -1,5 +1,5 @@
 from __future__ import with_statement
-from fabric.api import task, env, cd
+from fabric.api import task, env, cd, settings, hide
 from fabric.operations import run
 
 @task
@@ -35,4 +35,5 @@ def solrindex():
 @task
 def _drush(cmd):
     with cd('%s/current' % env.host_site_path):
-        run('drush ' + cmd)
+        with settings(hide('warnings'), warn_only=True):
+            run('drush ' + cmd)
