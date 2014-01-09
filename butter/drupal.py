@@ -45,11 +45,14 @@ def setup_env():
     with hide('running', 'stdout'):
         run('mkdir -p %s' % env.host_site_path)
     with cd(env.host_site_path):
-        with hide('running', 'stdout'):
+        with hide('stdout'):
             run('mkdir changesets files private')
             print('+ Cloning repository: %s' % env.repo_url)
-            run('%s clone %s private/repo' % (env.repo_type, env.repo_url))
-            run('chmod g+w private/repo')
+            run('ssh-keyscan -H github.com >> ~/.ssh/known_hosts')
+            run('ssh-keyscan -H bitbucket.org >> ~/.ssh/known_hosts')
+            run('%s clone --quiet %s private/repo' % (env.repo_type,
+                                                      env.repo_url))
+        run('chmod g+w private/repo')
     print('+ Site directory structure created at: %s' % env.host_site_path)
 
 
