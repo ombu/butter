@@ -6,6 +6,7 @@ from fabric.contrib import console
 from urlparse import urlparse
 from butter import deploy, sync as butter_sync
 from butter.host import pre_clean
+from .drush import solrindex
 
 @task
 def push(ref):
@@ -151,15 +152,21 @@ def build(dev='yes'):
         cd_function = cd
 
     with cd_function(env.host_site_path + '/' + env.public_path):
-        run_function("drush si --yes %s --site-name='%s' --site-mail='%s' --account-name='%s' --account-pass='%s' --account-mail='%s'" %
-                (env.site_profile, env.site_name, 'noreply@ombuweb.com', 'system', 'pass', 'noreply@ombuweb.com'))
-        if dev == 'yes':
-            run_function("drush en -y --skip %s" % env.dev_modules)
-            run_function("drush cc all")
+         run_function("drush si --yes %s --site-name='%s' --site-mail='%s' --account-name='%s' --account-pass='%s' --account-mail='%s'" %
+                 (env.site_profile, env.site_name, 'noreply@ombuweb.com', 'system', 'pass', 'noreply@ombuweb.com'))
+         if dev == 'yes':
+             run_function("drush en -y --skip %s" % env.dev_modules)
+             run_function("drush cc all")
 
-        # Rebuild solr, since apachesolr.module will reindex all newly created
-        # nodes, possibly creating duplicate content in the solr index.
-        run_function("drush pml --status=enabled | grep apachesolr && drush solr-delete-index && drush solr-mark-all && drush solr-index")
+         run_function("chmod 2770 sites/default")
+
+         # Rebuild solr, since apachesolr.module will reindex all newly created
+         # nodes, possibly creating duplicate content in the solr index.
+         # @todo: remove direct calls to drush and replace with execute() once
+         # global local vs. remote context has been figured out.
+         # execute(solrindex);
+         with settings(hide('warnings'), warn_only=True):
+             run_function('drush solr-delete-index && drush solr-mark-all && drush solr-index')
 
 @task
 def enforce_perms():
