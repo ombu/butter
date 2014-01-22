@@ -24,7 +24,6 @@ def push(ref):
     pre_clean(build_path)
     repo.checkout(parsed_ref)
     settings_php(build_path)
-    set_perms(build_path)
     link_files(build_path)
     deploy.mark(parsed_ref)
 
