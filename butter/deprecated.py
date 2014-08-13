@@ -1,11 +1,12 @@
 from butter.base import env
 
-def default_settings():
+
+def legacy_settings():
     """
-    Depricated method to add env global variables to the env.settings dictionary
-    Eventually these should be placed within env.settings.
+    Deprecated method to add env global variables to the `env.settings`
+    dictionary. These should instead be placed in `env.settings`.
     """
-    print ('+ Using depricated default settings')
+    print ('+ Using deprecated legacy settings')
     if 'db_db' in env:
         env.settings.db_db = env.db_db
     if 'db_user' in env:

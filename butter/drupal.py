@@ -6,7 +6,7 @@ from fabric.contrib import console
 from urlparse import urlparse
 from butter import deploy, sync as butter_sync
 from butter.host import pre_clean
-from butter.deprecated import default_settings
+from butter.deprecated import legacy_settings
 from .drush import solrindex
 
 @task
@@ -66,7 +66,7 @@ def settings_php(build_path):
     to `%%KEY%%`
     """
     print('+ Configuring site settings.php')
-    default_settings()
+    legacy_settings()
     with cd('%s/public/sites/default' % build_path):
         file = "settings.%s.php" % env.host_type
         if files.exists(file):
