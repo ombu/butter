@@ -6,6 +6,7 @@ from fabric.contrib import console
 from urlparse import urlparse
 from butter import deploy, sync as butter_sync
 from butter.host import pre_clean
+from butter.deprecated import default_settings
 from .drush import solrindex
 
 @task
@@ -57,18 +58,21 @@ def setup_env():
 
 
 def settings_php(build_path):
+    """
+    Setup settings.php file, with variable interpolation
+
+    Any additional variables requiring interpolation should live in the
+    env.settings dictionary. Dictionary keys will be translated from `key`
+    to `%%KEY%%`
+    """
     print('+ Configuring site settings.php')
+    default_settings()
     with cd('%s/public/sites/default' % build_path):
         file = "settings.%s.php" % env.host_type
         if files.exists(file):
-            files.sed(file, '%%DB_DB%%', env.db_db)
-            files.sed(file, '%%DB_USER%%', env.db_user)
-            files.sed(file, '%%DB_PW%%', env.db_pw)
-            files.sed(file, '%%DB_HOST%%', env.db_host)
-            if 'smtp_pw' in env:
-              files.sed(file, '%%SMTP_PW%%', env.smtp_pw)
-            if 'base_url' in env:
-                files.sed(file, '%%BASE_URL%%', env.base_url)
+            for key in env.settings:
+                files.sed(file, '%%' + key.upper() + '%%', env.settings[key])
+
             if files.exists('settings.php'):
                 run('rm settings.php')
             run('cp settings.%s.php settings.php' % env.host_type )
