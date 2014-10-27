@@ -25,6 +25,7 @@ def push(ref):
     pre_clean(build_path)
     repo.checkout(parsed_ref)
     settings_php(build_path)
+    restrict_robots(build_path)
     set_perms(build_path)
     link_files(build_path)
     deploy.mark(parsed_ref)
@@ -80,6 +81,17 @@ def settings_php(build_path):
         else:
             run('ls -lah')
             abort('Could not find %s' % file)
+
+def restrict_robots(build_path):
+    """
+    Restrict QA/Staging robots.txt
+    """
+    if env.host_type in { 'qa', 'staging' }:
+        print('+ Restricting robots')
+        file = '%s/public/robots.txt' % build_path
+        if files.exists(file):
+            run('echo "User-agent: *" >> %s' % file);
+            run('echo "Disallow: /" >> %s' % file);
 
 def set_perms(build_path):
     print('+ Setting Drupal permissions')
