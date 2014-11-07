@@ -1,6 +1,6 @@
 from __future__ import with_statement
 from fabric.api import task, env, cd, hide, execute, settings
-from fabric.operations import run, prompt
+from fabric.operations import run, prompt, put
 from fabric.contrib import files
 from fabric.contrib import console
 from urlparse import urlparse
@@ -8,6 +8,7 @@ from butter import deploy, sync as butter_sync
 from butter.host import pre_clean
 from butter.deprecated import legacy_settings
 from .drush import solrindex
+import StringIO
 
 @task
 def push(ref):
@@ -25,6 +26,7 @@ def push(ref):
     pre_clean(build_path)
     repo.checkout(parsed_ref)
     settings_php(build_path)
+    restrict_robots(build_path)
     set_perms(build_path)
     link_files(build_path)
     deploy.mark(parsed_ref)
@@ -80,6 +82,19 @@ def settings_php(build_path):
         else:
             run('ls -lah')
             abort('Could not find %s' % file)
+
+def restrict_robots(build_path):
+    """
+    Restrict QA/Staging robots.txt
+    """
+    if env.host_type in { 'qa', 'staging' }:
+        print('+ Restricting robots')
+        file = '%s/public/robots.txt' % build_path
+        robotstxt = StringIO.StringIO();
+        robotstxt.name = 'robots.txt'
+        robotstxt.write('User-agent: *\n')
+        robotstxt.write('Disallow: /')
+        put(robotstxt, file);
 
 def set_perms(build_path):
     print('+ Setting Drupal permissions')
