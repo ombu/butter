@@ -106,18 +106,21 @@ def sync_files(dst, opts_string=''):
     butter_sync.files(dst, opts_string)
 
 @task
-def sync_db(src, dst):
+def sync_db(dst, opts_string=''):
     """
     Copies a Drupal database from `src` to `dst` environment.
     """
-    butter_sync.db(src, dst)
+    butter_sync.db(dst, opts_string)
 
 @task
-def sync(src, dst):
+def sync(dst):
     """
     Moves drupal sites between servers
     """
-    sync_db(src, dst);
+    global env
+    src = env.tasks[0]
+
+    sync_db(dst);
     sync_files(dst);
     print('+ Site synced from %s to %s' % (src, dst))
 
