@@ -5,6 +5,7 @@ from copy import copy, deepcopy
 from boto.s3.connection import S3Connection
 from boto.s3.key import Key
 from datetime import datetime, timedelta
+from time import time
 
 @task
 def files(dst='local', opts_string=''):
@@ -153,7 +154,7 @@ def _get_s3_key(opts_string):
                 env.db_user, env.db_pw, env.db_db)
         valid_dump = 's3://%s/%s%s.sql.gz' % (env.s3_db_bucket,
                 src_directory, datetime.today().strftime('%Y%m%d'))
-        tmp_file = '/tmp/%s-%s.sql.gz' % (env.s3_namespace, src)
+        tmp_file = '/tmp/%s-%s.%d.sql.gz' % (env.s3_namespace, src, int(time()))
         run('%s | gzip -c > %s && aws s3 cp %s %s %s && rm %s' % (dump_sql,
                 tmp_file, opts_string, tmp_file, valid_dump, tmp_file))
 
