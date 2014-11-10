@@ -91,7 +91,7 @@ def get_s3_db_key(opts_string):
     """
 
     # Find a sql dump within the past 5 days.
-    valid_dump = find_s3_db_dump(prompt=True)
+    valid_dump = find_s3_db_dump(prompt_db=True)
 
     # If a recent dump hasn't been found, create a new one.
     if not valid_dump:
@@ -99,7 +99,7 @@ def get_s3_db_key(opts_string):
 
     return valid_dump
 
-def find_s3_db_dump(day_granularity=5, prompt=False):
+def find_s3_db_dump(day_granularity=5, prompt_db=False):
     """
     Attempts to find a valid dump in S3 within the day granularity
 
@@ -120,8 +120,12 @@ def find_s3_db_dump(day_granularity=5, prompt=False):
     if list(keys):
         for key in _filter_s3_files(keys):
             if datetime.strptime(key.last_modified[:19], date_format) >= date_limit:
-                accept = prompt('A database dump has been found from %s. Do you want to import this dump?' % key.last_modified, None, 'y', 'y|n')
-                if accept == 'y':
+                if prompt_db:
+                    accept_dump = prompt('A database dump has been found from %s. Do you want to import this dump ("n" will generate a new dump)?' % (key.last_modified), default='y', validate='y|n')
+                else:
+                    accept_dump = 'y'
+
+                if accept_dump == 'y':
                     valid_dump = 's3://' + env.s3_bucket + '/' + key.name
                 break;
 
