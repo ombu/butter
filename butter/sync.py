@@ -62,7 +62,6 @@ def db(dst='local', opts_string=''):
     """
     Copies a database from environment's S3 bucket to `dst` environment.
     """
-    global env
     src = env.tasks[0]
 
     if src == 'local':
@@ -135,7 +134,6 @@ def push_db_to_s3(opts_string):
     """
     Creates a new DB dump from environment and pushes to S3
     """
-    global env
     src = env.tasks[0]
 
     dump_sql = 'mysqldump -h %s -u%s -p%s %s' % (env.db_host,
@@ -143,8 +141,11 @@ def push_db_to_s3(opts_string):
     valid_dump = 's3://%s/%s%s.sql.gz' % (env.s3_bucket,
             _get_s3_bucket(), datetime.today().strftime('%Y%m%d'))
     tmp_file = '/tmp/%s-%s.%d.sql.gz' % (env.s3_namespace, src, int(time()))
-    run('%s | gzip -c > %s && aws s3 cp %s %s %s && rm %s' % (dump_sql,
-            tmp_file, opts_string, tmp_file, valid_dump, tmp_file))
+    run('%(dump_sql)s | gzip -c > %(tmp)s && aws s3 cp %(opts)s %(tmp)s %(dump)s && rm %(tmp)s' % {
+        'dump_sql': dump_sql,
+        'tmp': tmp_file,
+        'opts': opts_string,
+        'dump': valid_dump })
 
     return valid_dump
 
@@ -152,6 +153,8 @@ def pull_db_from_s3(dump, dst, opts_string):
     """
     Pulls database from S3 to dst
     """
+    src = env.tasks[0]
+
     # record the environments
     dst_env = _get_env(dst)
 
@@ -175,13 +178,17 @@ def pull_db_from_s3(dump, dst, opts_string):
 
     import_sql = 'mysql -h %s -u%s -p%s -D%s' % (dst_env.db_host,
             dst_env.db_user, dst_env.db_pw, dst_env.db_db)
-    run_function('aws s3 cp %s %s - | gunzip -c | %s' % (opts_string, dump, import_sql))
+    tmp_file = '/tmp/%s-%s.%d.sql.gz' % (env.s3_namespace, src, int(time()))
+    run_function('aws s3 cp %(opts)s %(dump)s %(tmp)s && gunzip -c %(tmp)s | %(import_sql)s && rm %(tmp)s' % {
+        'opts': opts_string,
+        'dump': dump,
+        'tmp': tmp_file,
+        'import_sql': import_sql })
 
 def _get_s3_bucket(bucket_type='db'):
     """
     Returns namespaced bucket path for environment
     """
-    global env
     src = env.tasks[0]
     return env.s3_namespace + '.' + src + '/' + bucket_type + '/'
 
@@ -199,7 +206,6 @@ def _get_env(env_name):
     """
     Returns an env object for env_name without overwriting the global env.
     """
-    global env
     previous = deepcopy(env)
     execute(env_name)
     local_env = deepcopy(env)
