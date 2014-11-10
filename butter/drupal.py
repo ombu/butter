@@ -108,7 +108,7 @@ def sync_files(dst, opts_string=''):
 @task
 def sync_db(dst, opts_string=''):
     """
-    Copies a Drupal database from `src` to `dst` environment.
+    Copies a Drupal database from environment to `dst` environment.
     """
     butter_sync.db(dst, opts_string)
 
