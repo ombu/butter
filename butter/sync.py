@@ -17,10 +17,14 @@ def files(dst='local', opts_string=''):
     if not 's3_bucket' in env:
         abort('Please configure an env.s3_bucket for this project.')
 
+    # TODO: Move region into individual push/pull f, reading from
+    # global settings.
     opts_string += ' --region=us-west-2'
 
     push_files_to_s3(opts_string)
+    execute(dst)
     pull_files_from_s3(dst, opts_string)
+    execute(get_source_environment())
 
 def push_files_to_s3(opts_string=''):
     """
@@ -62,23 +66,31 @@ def db(dst='local', opts_string=''):
     """
     Copies a database from environment's S3 bucket to `dst` environment.
     """
-    src = env.tasks[0]
+    src = get_source_environment()
 
     if src == 'local':
         abort('Cannot sync from local.')
+
     if dst == 'production':
-      force_push = prompt('Are you sure you want to push to production (WARNING: this will destroy production db):', None, 'n', 'y|n')
-      if force_push == 'n':
-        abort('Sync aborted')
+        force_push = prompt(
+            'Are you sure you want to push to production (WARNING: this will'
+            ' destroy production db):', None, 'n', 'y|n')
+        if force_push == 'n':
+            abort('Sync aborted')
 
     if not 's3_bucket' in env:
         abort('Please configure an env.s3_bucket for this project.')
 
-    # get S3 key path for src
-    opts_string += ' --region=us-west-2'
-    dump = get_s3_db_key(opts_string)
+    try:
+        dump_path = find_s3_db_dump(prompt_db=True)
+    except DumpNotFound:
+        dump_path = push_db_to_s3()
 
-    pull_db_from_s3(dump, dst, opts_string)
+    execute(dst)
+
+    pull_db_from_s3(dump_path)
+
+    execute(src)
 
     print('+ Database synced from %s to %s' % (src, dst))
 
@@ -130,11 +142,15 @@ def find_s3_db_dump(day_granularity=5, prompt_db=False):
 
     return valid_dump
 
-def push_db_to_s3(opts_string):
+def push_db_to_s3():
     """
     Creates a new DB dump from environment and pushes to S3
     """
-    src = env.tasks[0]
+
+    # TODO: Get global setting
+    opts_string = ' --region=us-west-2'
+
+    src = get_source_environment()
 
     dump_sql = 'mysqldump -h %s -u%s -p%s %s' % (env.db_host,
             env.db_user, env.db_pw, env.db_db)
@@ -149,22 +165,20 @@ def push_db_to_s3(opts_string):
 
     return valid_dump
 
-def pull_db_from_s3(dump, dst, opts_string):
+def pull_db_from_s3(dump, opts_string):
     """
     Pulls database from S3 to dst
     """
-    src = env.tasks[0]
+    src = get_source_environment()
 
-    # record the environments
-    dst_env = _get_env(dst)
 
     # If there's no host defined, assume localhost and run tasks locally.
-    if not dst_env.hosts:
+    if not env.hosts:
         run_function = local
     else:
         run_function = run
 
-    dst_env.db_host = _mysql_db_host(dst_env)
+    env.db_host = _mysql_db_host(env)
 
     # Drop the previous tables in dst in case it has tables not in src.
     drop_tables_sql = """mysql -h %(db_host)s -u%(db_user)s -p%(db_pw)s -BNe "show tables" %(db_db)s \
@@ -189,7 +203,8 @@ def _get_s3_bucket(bucket_type='db'):
     """
     Returns namespaced bucket path for environment
     """
-    src = env.tasks[0]
+
+    src = get_source_environment()
     return env.s3_namespace + '.' + src + '/' + bucket_type + '/'
 
 def _mysql_db_host(local_env):
@@ -230,3 +245,10 @@ def _filter_s3_files(keys):
     Filters out directories from a list of S3 keys
     """
     return (key for key in keys if not key.name.endswith('/'))
+
+def get_source_environment():
+    """
+    Not the prettiest way to get the source environment because it assumes
+    it's the first task called, but good enough for now.
+    """
+    return env.tasks[0]

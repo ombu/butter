@@ -118,7 +118,7 @@ def sync(dst):
     Moves drupal sites between servers
     """
     global env
-    src = env.tasks[0]
+    src = butter_sync.get_source_environment()
 
     sync_db(dst);
     sync_files(dst);
