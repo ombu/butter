@@ -19,6 +19,7 @@ def local():
     """
     The local host definition
     """
+    env.host_type = 'local'
     env.db_db = 'foo'
     env.db_user = 'foo_user'
     env.db_pw = 'bar'

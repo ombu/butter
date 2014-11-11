@@ -1,9 +1,7 @@
 from fabric.api import task, env, execute, settings
 from fabric.operations import run, local, prompt
 from fabric.utils import abort
-from copy import copy, deepcopy
 from boto.s3.connection import S3Connection
-from boto.s3.key import Key
 from datetime import datetime, timedelta
 from time import time
 
@@ -23,7 +21,7 @@ def files(dst='local', opts_string=''):
 
     push_files_to_s3(opts_string)
     execute(dst)
-    pull_files_from_s3(dst, opts_string)
+    pull_files_from_s3(opts_string)
     execute(get_source_environment())
 
 def push_files_to_s3(opts_string=''):
@@ -32,34 +30,32 @@ def push_files_to_s3(opts_string=''):
     """
     s3_directory = 's3://' + env.s3_bucket + '/' + _get_s3_bucket('files')
     src_files = env.host_site_path + '/' + env.files_path
-    run('aws s3 sync %s %s %s' % (opts_string,
-            src_files, s3_directory))
+    run('aws s3 sync %s %s %s'
+        % (opts_string, src_files, s3_directory))
 
-def pull_files_from_s3(dst, opts_string=''):
+def pull_files_from_s3(opts_string=''):
     """
     Sync files from S3 to dst
     """
-    execute(dst)
-    dst_env = copy(env)
     s3_directory = 's3://' + env.s3_bucket + '/' + _get_s3_bucket('files')
 
-    if not 'files_path' in dst_env:
-        abort('`files_path` not found in dst env.')
+    if not 'files_path' in env:
+        abort('`files_path` not found in env.')
 
-    if dst == 'local':
+    if env.host_type == 'local':
         # Ensure drupal.sync works anywhere in project structure by getting the
         # directory that the fabfile is in (project root).
         import os
-        dst_files = os.path.dirname(env.real_fabfile) + '/' + dst_env.files_path
-        local('aws s3 sync %s %s %s' % (s3_directory,
-            dst_files, opts_string));
+        dst_files = os.path.dirname(env.real_fabfile) + '/' + env.files_path
+        local('aws s3 sync %s %s %s'
+              % (s3_directory, dst_files, opts_string))
     else:
-        with settings(host_string=dst_env.hosts[0]):
-            dst_files = '%s/%s' % (dst_env.host_site_path, dst_env.files_path)
-            run('aws s3 sync %s %s %s' % (s3_directory,
-                dst_files, opts_string));
+        with settings(host_string=env.hosts[0]):
+            dst_files = '%s/%s' % (env.host_site_path, env.files_path)
+            run('aws s3 sync %s %s %s'
+                % (s3_directory, dst_files, opts_string))
 
-    print('+ Files synced to %s' % dst_env.files_path)
+    print '+ Files synced to %s' % env.files_path
 
 @task
 def db(dst='local', opts_string=''):
@@ -92,23 +88,7 @@ def db(dst='local', opts_string=''):
 
     execute(src)
 
-    print('+ Database synced from %s to %s' % (src, dst))
-
-def get_s3_db_key(opts_string):
-    """
-    Returns S3 sql dump key path for environment
-
-    If dump doesn't exist, a new one will be created.
-    """
-
-    # Find a sql dump within the past 5 days.
-    valid_dump = find_s3_db_dump(prompt_db=True)
-
-    # If a recent dump hasn't been found, create a new one.
-    if not valid_dump:
-        valid_dump = push_db_to_s3(opts_string)
-
-    return valid_dump
+    print '+ Database synced from %s to %s' % (src, dst)
 
 def find_s3_db_dump(day_granularity=5, prompt_db=False):
     """
@@ -132,15 +112,25 @@ def find_s3_db_dump(day_granularity=5, prompt_db=False):
         for key in _filter_s3_files(keys):
             if datetime.strptime(key.last_modified[:19], date_format) >= date_limit:
                 if prompt_db:
-                    accept_dump = prompt('A database dump has been found from %s. Do you want to import this dump ("n" will generate a new dump)?' % (key.last_modified), default='y', validate='y|n')
+                    accept_dump = prompt(
+                        'A database dump has been found from %s. Do you want'
+                        'to import this dump ("n" will generate a new dump)?'
+                        % (key.last_modified), default='y', validate='y|n'
+                    )
                 else:
                     accept_dump = 'y'
 
                 if accept_dump == 'y':
                     valid_dump = 's3://' + env.s3_bucket + '/' + key.name
-                break;
+                break
+
+    if not valid_dump:
+        raise DumpNotFound()
 
     return valid_dump
+
+class DumpNotFound(Exception()):
+    pass
 
 def push_db_to_s3():
     """
@@ -152,52 +142,66 @@ def push_db_to_s3():
 
     src = get_source_environment()
 
-    dump_sql = 'mysqldump -h %s -u%s -p%s %s' % (env.db_host,
-            env.db_user, env.db_pw, env.db_db)
-    valid_dump = 's3://%s/%s%s.sql.gz' % (env.s3_bucket,
-            _get_s3_bucket(), datetime.today().strftime('%Y%m%d'))
+    dump_sql = 'mysqldump -h %s -u%s -p%s %s' % (
+        env.db_host, env.db_user, env.db_pw, env.db_db
+    )
+    valid_dump = 's3://%s/%s%s.sql.gz' % (
+        env.s3_bucket, _get_s3_bucket(), datetime.today().strftime('%Y%m%d')
+    )
     tmp_file = '/tmp/%s-%s.%d.sql.gz' % (env.s3_namespace, src, int(time()))
-    run('%(dump_sql)s | gzip -c > %(tmp)s && aws s3 cp %(opts)s %(tmp)s %(dump)s && rm %(tmp)s' % {
-        'dump_sql': dump_sql,
-        'tmp': tmp_file,
-        'opts': opts_string,
-        'dump': valid_dump })
+    run(
+        '%(dump_sql)s | gzip -c > %(tmp)s &&'
+        'aws s3 cp %(opts)s %(tmp)s %(dump)s && rm %(tmp)s' % {
+            'dump_sql': dump_sql,
+            'tmp': tmp_file,
+            'opts': opts_string,
+            'dump': valid_dump
+        }
+    )
 
     return valid_dump
 
-def pull_db_from_s3(dump, opts_string):
+def pull_db_from_s3(dump):
     """
     Pulls database from S3 to dst
     """
-    src = get_source_environment()
 
+    # TODO: Get global setting
+    opts_string = ' --region=us-west-2'
 
     # If there's no host defined, assume localhost and run tasks locally.
-    if not env.hosts:
+    if env.host_type == 'local':
         run_function = local
     else:
         run_function = run
 
-    env.db_host = _mysql_db_host(env)
-
     # Drop the previous tables in dst in case it has tables not in src.
-    drop_tables_sql = """mysql -h %(db_host)s -u%(db_user)s -p%(db_pw)s -BNe "show tables" %(db_db)s \
+    drop_tables_sql = """mysql -h %(db_host)s -u%(db_user)s -p%(db_pw)s \
+        -BNe "show tables" %(db_db)s \
         | tr '\n' ',' | sed -e 's/,$//' \
         | awk '{print "SET FOREIGN_KEY_CHECKS = 0;DROP TABLE IF EXISTS " $1 ";SET FOREIGN_KEY_CHECKS = 1;"}' \
         | mysql -h %(db_host)s -u%(db_user)s -p%(db_pw)s %(db_db)s"""
 
-    run_function(drop_tables_sql % {"db_host": dst_env.db_host,
-        "db_user": dst_env.db_user, "db_pw": dst_env.db_pw,
-        "db_db": dst_env.db_db})
+    run_function(drop_tables_sql % {
+        "db_host": env.db_host,
+        "db_user": env.db_user,
+        "db_pw": env.db_pw,
+        "db_db": env.db_db
+        })
 
-    import_sql = 'mysql -h %s -u%s -p%s -D%s' % (dst_env.db_host,
-            dst_env.db_user, dst_env.db_pw, dst_env.db_db)
-    tmp_file = '/tmp/%s-%s.%d.sql.gz' % (env.s3_namespace, src, int(time()))
-    run_function('aws s3 cp %(opts)s %(dump)s %(tmp)s && gunzip -c %(tmp)s | %(import_sql)s && rm %(tmp)s' % {
-        'opts': opts_string,
-        'dump': dump,
-        'tmp': tmp_file,
-        'import_sql': import_sql })
+    import_sql = 'mysql -h %s -u%s -p%s -D%s' % (
+        env.db_host, env.db_user, env.db_pw, env.db_db
+    )
+    tmp_file = '/tmp/%s-%s.%d.sql.gz' % (
+        env.s3_namespace, env.host_type, int(time())
+    )
+    run_function('aws s3 cp %(opts)s %(dump)s %(tmp)s && gunzip -c %(tmp)s |'
+                 '%(import_sql)s && rm %(tmp)s' % {
+                     'opts': opts_string,
+                     'dump': dump,
+                     'tmp': tmp_file,
+                     'import_sql': import_sql
+                 })
 
 def _get_s3_bucket(bucket_type='db'):
     """
@@ -206,39 +210,6 @@ def _get_s3_bucket(bucket_type='db'):
 
     src = get_source_environment()
     return env.s3_namespace + '.' + src + '/' + bucket_type + '/'
-
-def _mysql_db_host(local_env):
-    """
-    Figures out the correct host to use for database moving calls.
-    """
-    db_host = getattr(local_env, 'db_host', 'localhost')
-    hosts = getattr(local_env, 'hosts', [])
-    if db_host == 'localhost' and len(hosts):
-        db_host = hosts[0]
-    return db_host
-
-def _get_env(env_name):
-    """
-    Returns an env object for env_name without overwriting the global env.
-    """
-    previous = deepcopy(env)
-    execute(env_name)
-    local_env = deepcopy(env)
-
-    # Delete any attributes that were added.
-    for key, value in local_env.iteritems():
-        if not key in previous:
-            del env[key]
-
-    # Put the original values back on env.
-    for key, value in previous.iteritems():
-        env[key] = value
-
-    # If loading local environment, unset hosts, since it can cause problems.
-    if env_name == 'local':
-        local_env['hosts'] = []
-
-    return local_env
 
 def _filter_s3_files(keys):
     """
