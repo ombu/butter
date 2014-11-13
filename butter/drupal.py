@@ -1,12 +1,14 @@
 from __future__ import with_statement
 from fabric.api import task, env, cd, hide, execute, settings
-from fabric.operations import run, prompt
+from fabric.operations import run, prompt, put
 from fabric.contrib import files
 from fabric.contrib import console
 from urlparse import urlparse
 from butter import deploy, sync as butter_sync
 from butter.host import pre_clean
+from butter.deprecated import legacy_settings
 from .drush import solrindex
+import StringIO
 
 @task
 def push(ref):
@@ -24,6 +26,8 @@ def push(ref):
     pre_clean(build_path)
     repo.checkout(parsed_ref)
     settings_php(build_path)
+    restrict_robots(build_path)
+    set_perms(build_path)
     link_files(build_path)
     deploy.mark(parsed_ref)
 
@@ -56,18 +60,21 @@ def setup_env():
 
 
 def settings_php(build_path):
+    """
+    Setup settings.php file, with variable interpolation
+
+    Any additional variables requiring interpolation should live in the
+    env.settings dictionary. Dictionary keys will be translated from `key`
+    to `%%KEY%%`
+    """
     print('+ Configuring site settings.php')
+    legacy_settings()
     with cd('%s/public/sites/default' % build_path):
         file = "settings.%s.php" % env.host_type
         if files.exists(file):
-            files.sed(file, '%%DB_DB%%', env.db_db)
-            files.sed(file, '%%DB_USER%%', env.db_user)
-            files.sed(file, '%%DB_PW%%', env.db_pw)
-            files.sed(file, '%%DB_HOST%%', env.db_host)
-            if 'smtp_pw' in env:
-              files.sed(file, '%%SMTP_PW%%', env.smtp_pw)
-            if 'base_url' in env:
-                files.sed(file, '%%BASE_URL%%', env.base_url)
+            for key in env.settings:
+                files.sed(file, '%%' + key.upper() + '%%', env.settings[key])
+
             if files.exists('settings.php'):
                 run('rm settings.php')
             run('cp settings.%s.php settings.php' % env.host_type )
@@ -75,6 +82,19 @@ def settings_php(build_path):
         else:
             run('ls -lah')
             abort('Could not find %s' % file)
+
+def restrict_robots(build_path):
+    """
+    Restrict QA/Staging robots.txt
+    """
+    if env.host_type in { 'qa', 'staging' }:
+        print('+ Restricting robots')
+        file = '%s/public/robots.txt' % build_path
+        robotstxt = StringIO.StringIO();
+        robotstxt.name = 'robots.txt'
+        robotstxt.write('User-agent: *\n')
+        robotstxt.write('Disallow: /')
+        put(robotstxt, file);
 
 def set_perms(build_path):
     print('+ Setting Drupal permissions')
