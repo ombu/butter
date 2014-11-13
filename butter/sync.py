@@ -113,7 +113,7 @@ def find_s3_db_dump(day_granularity=5, prompt_db=False):
             if datetime.strptime(key.last_modified[:19], date_format) >= date_limit:
                 if prompt_db:
                     accept_dump = prompt(
-                        'A database dump has been found from %s. Do you want'
+                        'A database dump has been found from %s. Do you want '
                         'to import this dump ("n" will generate a new dump)?'
                         % (key.last_modified), default='y', validate='y|n'
                     )
@@ -129,7 +129,7 @@ def find_s3_db_dump(day_granularity=5, prompt_db=False):
 
     return valid_dump
 
-class DumpNotFound(Exception()):
+class DumpNotFound(Exception):
     pass
 
 def push_db_to_s3():
