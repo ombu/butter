@@ -1,1 +1,2 @@
 Fabric >= l.3.4
+awscli >= 1.1.0
