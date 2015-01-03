@@ -74,7 +74,8 @@ def deploy(ref='origin/master'):
                 '--settings=%(django_settings_module)s --noinput'
                 % env)
             run('mkdir -p static && python manage.py collectstatic '
-                '--settings=%(django_settings_module)s --clear --noinput'
+                '--settings=%(django_settings_module)s --clear --noinput '
+                '--verbosity 0'
                 % env)
 
     # Restart services
