@@ -48,7 +48,7 @@ def uninstall():
 
 
 @task
-def deploy(ref='master'):
+def deploy(ref='origin/master'):
     """ Deploy a version of the application into an installed environment. """
     require('host_type', 'app_path', provided_by=env.available_environments)
 
@@ -61,7 +61,7 @@ def deploy(ref='master'):
             exit()
 
     with cd(env.app_path + '/app'):
-        run('git fetch -q && git checkout -f origin/%s' % ref)
+        run('git fetch -q && git checkout -f %s' % ref)
 
     _install_requirements()
 
