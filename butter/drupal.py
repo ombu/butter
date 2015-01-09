@@ -182,13 +182,16 @@ def build(dev='yes'):
 
          run_function("chmod 2770 sites/default")
 
-         # Rebuild solr, since apachesolr.module will reindex all newly created
-         # nodes, possibly creating duplicate content in the solr index.
+         # Rebuild solr or core search in order to index all newly created
+         # nodes.
          # @todo: remove direct calls to drush and replace with execute() once
          # global local vs. remote context has been figured out.
          # execute(solrindex);
          with settings(hide('warnings'), warn_only=True):
-             run_function('drush solr-delete-index && drush solr-mark-all && drush solr-index')
+             if run_function('drush pml --status=enabled | grep apachesolr', capture=True).succeeded:
+                run_function('drush solr-delete-index && drush solr-mark-all && drush solr-index')
+             if run_function('drush pml --status=enabled | grep search', capture=True).succeeded:
+                run_function('drush search-index')
 
 @task
 def enforce_perms():
