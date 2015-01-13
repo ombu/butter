@@ -83,6 +83,18 @@ def deploy(ref='origin/master'):
          'memcached restart')
 
 
+@task
+def manage(cmd):
+    """ Run a `manage.py` command on an installed environment. """
+    require('app_path', 'django_settings_module',
+            provided_by=env.available_environments)
+    with cd(env.app_path + '/app'):
+        with prefix('source ../venv/bin/activate'):
+            run('python manage.py {cmd} --settings={settings}'.format(
+                cmd=cmd, settings=env.django_settings_module
+                ))
+
+
 ################################################################################
 # Task helpers
 ################################################################################
