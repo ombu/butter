@@ -164,6 +164,7 @@ def build(dev='yes'):
         from fabric.operations import local
         from fabric.api import lcd
         run_function = local
+        run_args = {'capture': True}
         cd_function = lcd
 
         # Ensure drupal.build can be run in any directory locally.
@@ -171,6 +172,7 @@ def build(dev='yes'):
         env.host_site_path = os.path.dirname(env.real_fabfile)
     else:
         run_function = run
+        run_args = {'quiet': True}
         cd_function = cd
 
     with cd_function(env.host_site_path + '/' + env.public_path):
@@ -188,9 +190,9 @@ def build(dev='yes'):
          # global local vs. remote context has been figured out.
          # execute(solrindex);
          with settings(hide('warnings'), warn_only=True):
-             if run_function('drush pml --status=enabled | grep apachesolr', capture=True).succeeded:
+             if run_function('drush pml --status=enabled | grep apachesolr', **run_args).succeeded:
                 run_function('drush solr-delete-index && drush solr-mark-all && drush solr-index')
-             if run_function('drush pml --status=enabled | grep search', capture=True).succeeded:
+             if run_function('drush pml --status=enabled | grep search', **run_args).succeeded:
                 run_function('drush search-index')
 
 @task
