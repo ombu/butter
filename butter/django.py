@@ -62,6 +62,7 @@ def deploy(ref='origin/master'):
 
     with cd(env.app_path + '/app'):
         run('git fetch -q && git checkout -f %s' % ref)
+        run('git submodule --quiet update --init --recursive')
 
     _install_requirements()
 
