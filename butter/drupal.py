@@ -182,8 +182,6 @@ def build(dev='yes'):
              run_function("drush en -y --skip %s" % env.dev_modules)
              run_function("drush cc all")
 
-         run_function("chmod 2770 sites/default")
-
          # Rebuild solr or core search in order to index all newly created
          # nodes.
          # @todo: remove direct calls to drush and replace with execute() once
