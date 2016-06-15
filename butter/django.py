@@ -70,7 +70,8 @@ def deploy(ref='origin/master'):
     with cd(env.app_path + '/app'):
         with prefix('source ../venv/bin/activate'):
             run('python manage.py syncdb '
-                '--settings=%(django_settings_module)s --noinput' % env)
+                '--settings=%(django_settings_module)s --noinput' % env,
+                warn_only=True)
             run('python manage.py migrate '
                 '--settings=%(django_settings_module)s --noinput'
                 % env)
