@@ -77,7 +77,7 @@ def deploy(ref='origin/master'):
                 warn_only=True)
             run('python manage.py migrate '
                 '--settings=%(django_settings_module)s --noinput'
-                % env)
+                % env, warn_only=True)
             run('mkdir -p static && python manage.py collectstatic '
                 '--settings=%(django_settings_module)s --clear --noinput '
                 '--verbosity 0'
@@ -85,7 +85,7 @@ def deploy(ref='origin/master'):
 
     # Restart services
     sudo('service uwsgi restart && service nginx restart && service '
-         'memcached restart')
+         'memcached restart', warn_only=True)
 
 
 @task
