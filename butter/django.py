@@ -30,6 +30,9 @@ def install(branch='master'):
     run('if ! [ -d %s/app ]; then git clone -q -b %s %s %s/app; fi' %
         (env.app_path, branch, env.repo_uri, env.app_path))
 
+    with cd(env.app_path + '/app'):
+        run('git submodule --quiet update --init --recursive')
+
     # Setup virtualenv + app's python requirements
     run('if ! [ -d %(app_path)s/venv ]; then virtualenv %(app_path)s/venv;'
         ' fi' % env)
