@@ -99,6 +99,13 @@ def manage(cmd):
                 cmd=cmd, settings=env.django_settings_module
                 ))
 
+@task
+def log(how_many=1):
+    """ Log the most recent {how_many} commits from the repo on the environment """
+    require('app_path', provided_by=env.available_environments)
+    with cd(env.app_path + '/app'):
+        run('git log -{how_many}'.format(how_many=int(how_many)))
+
 
 ################################################################################
 # Task helpers
