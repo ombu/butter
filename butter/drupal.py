@@ -185,7 +185,7 @@ def build(dev='yes'):
          if dev == 'yes':
             if env.drupal_version == 8:
                 run_function("drush en -y %s" % env.dev_modules)
-                run_function("drush cc all")
+                run_function("drush cr")
             else:
                 run_function("drush en -y --skip %s" % env.dev_modules)
                 run_function("drush cc all")
