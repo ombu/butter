@@ -6,7 +6,7 @@ from distutils.core import setup
 
 setup(
     name='Butter',
-    version='0.0.1',
+    version='0.0.2',
     author='OMBU',
     author_email='martin@ombuweb.com',
     packages=['butter'],
@@ -15,7 +15,7 @@ setup(
     description='Fabric library for developing and deploying Drupal sites.',
     long_description=open('README.rst').read(),
     install_requires=[
-        "Fabric >= l.3.4",
+        "Fabric < 2.0",
         "awscli >= 1.1.0"
     ],
 )
